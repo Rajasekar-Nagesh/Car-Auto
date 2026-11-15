@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0f14">
+  <title>Car-Auto</title>
+  <meta name="description" content="A free Android Auto / CarPlay alternative for Android car stereos, with a phone remote for Android and iPhone.">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/app.css">
+  <script>
+    // Return visitors go straight to the screen they used last.
+    try {
+      var role = JSON.parse(localStorage.getItem('carauto.role'));
+      var stay = location.search.indexOf('choose') !== -1;
+      if (!stay && role === 'car') location.replace('car.html' + location.search);
+      if (!stay && role === 'phone') location.replace('phone.html' + location.search);
+    } catch (e) {}
+  </script>
+</head>
+<body class="landing night">
+  <main class="stack">
+    <img src="icons/icon.svg" alt="" width="88" height="88">
+    <h1>Car-Auto</h1>
+    <p class="muted">Maps, music, calls and voice control for car stereos without Android Auto or CarPlay.</p>
+    <a class="choice" href="car.html">
+      <span class="choice-icon">🚗</span>
+      <span><b>This is my car stereo</b><span class="muted">Open the car dashboard. Best on an Android touchscreen stereo, in Chrome.</span></span>
+    </a>
+    <a class="choice" href="phone.html">
+      <span class="choice-icon">📱</span>
+      <span><b>This is my phone</b><span class="muted">Remote for Android and iPhone. Send destinations, control music, share GPS.</span></span>
+    </a>
+    <p class="muted small">Free and open source. No account, no tracking. Your settings stay on your devices.</p>
+  </main>
+</body>
+</html>

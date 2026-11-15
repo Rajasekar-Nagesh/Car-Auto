@@ -1,0 +1,11 @@
+{
+  "name": "car-auto",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Android Auto / CarPlay alternative for Android car stereos, with a phone remote for Android and iPhone.",
+  "license": "MIT",
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "test": "node tests/smoke.cjs"
+  }
+}

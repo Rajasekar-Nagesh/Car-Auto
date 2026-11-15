@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#0b0f14">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>Car-Auto Dash</title>
+  <link rel="manifest" href="manifest-car.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body class="car night">
+  <nav class="rail" aria-label="Main">
+    <button data-view="home" class="active" aria-label="Home">
+      <svg viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span>Home</span>
+    </button>
+    <button data-view="map" aria-label="Map">
+      <svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg><span>Maps</span>
+    </button>
+    <button data-view="music" aria-label="Music">
+      <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0zm12-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0z" fill="none" stroke="currentColor" stroke-width="2"/></svg><span>Music</span>
+    </button>
+    <button data-view="phone" aria-label="Phone">
+      <svg viewBox="0 0 24 24"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z"/></svg><span>Phone</span>
+    </button>
+    <button id="btn-voice" class="voice" aria-label="Voice command">
+      <svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11z"/></svg><span>Voice</span>
+    </button>
+    <button data-view="settings" aria-label="Settings">
+      <svg viewBox="0 0 24 24"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3h-4l-.4 2.9a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1L11 21h4l.4-2.9a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg><span>Settings</span>
+    </button>
+    <div class="rail-clock" id="rail-clock">--:--</div>
+  </nav>
+
+  <main>
+    <!-- HOME -->
+    <section class="view" id="view-home">
+      <div class="dash">
+        <div class="tile tile-clock">
+          <div class="clock" id="home-clock">--:--</div>
+          <div class="muted" id="home-date"></div>
+          <div class="weather" id="home-weather"><span class="muted">Weather appears once location is found</span></div>
+        </div>
+        <div class="tile tile-speed">
+          <div class="speed"><span id="home-speed">0</span><small id="home-speed-unit">km/h</small></div>
+        </div>
+        <div class="tile tile-nav" id="tile-nav"></div>
+        <div class="tile tile-np">
+          <div class="tile-label">Now playing</div>
+          <div class="np-row">
+            <div class="art" data-np="art">📻</div>
+            <div class="meta"><b data-np="title">Nothing playing</b><span class="muted" data-np="sub"></span></div>
+          </div>
+          <div class="controls">
+            <button class="ctl" data-media="prev" aria-label="Previous">⏮</button>
+            <button class="ctl main" data-media="toggle" aria-label="Play">▶</button>
+            <button class="ctl" data-media="next" aria-label="Next">⏭</button>
+          </div>
+        </div>
+        <div class="tile tile-quick">
+          <div class="tile-label">Quick dial</div>
+          <div class="quick-row" id="quick-contacts"></div>
+        </div>
+        <div class="tile tile-link" id="tile-link"></div>
+      </div>
+    </section>
+
+    <!-- MAP -->
+    <section class="view view-map" id="view-map" hidden>
+      <div id="map"></div>
+      <div class="map-top">
+        <form id="nav-search" class="search" autocomplete="off">
+          <input type="search" placeholder="Search a place or address" enterkeyhint="search" aria-label="Search destination">
+          <button class="btn primary" type="submit">Go</button>
+        </form>
+        <div id="nav-results" class="results" hidden></div>
+        <div id="maneuver" class="maneuver" hidden>
+          <div class="arrow"></div>
+          <div class="m-body">
+            <div class="dist"></div>
+            <div class="text"></div>
+          </div>
+          <div class="then" hidden></div>
+        </div>
+      </div>
+      <div id="route-preview" class="route-preview card" hidden></div>
+      <div class="map-speed" id="map-speed"><b>0</b></div>
+      <button id="btn-recenter" class="fab" hidden aria-label="Re-center">◎</button>
+      <div id="tripbar" class="tripbar" hidden>
+        <div><b id="trip-eta">--:--</b><span class="muted">arrival</span></div>
+        <div><b id="trip-time">–</b><span class="muted">time</span></div>
+        <div><b id="trip-remain">–</b><span class="muted">distance</span></div>
+        <button id="btn-stop-nav" class="btn danger">End</button>
+      </div>
+    </section>
+
+    <!-- MUSIC -->
+    <section class="view view-music" id="view-music" hidden>
+      <div class="music-side card">
+        <div class="art big-art" data-np="art">📻</div>
+        <b class="np-title" data-np="title">Nothing playing</b>
+        <span class="muted" data-np="sub"></span>
+        <div class="controls">
+          <button class="ctl" data-media="prev" aria-label="Previous">⏮</button>
+          <button class="ctl main" data-media="toggle" aria-label="Play">▶</button>
+          <button class="ctl" data-media="next" aria-label="Next">⏭</button>
+        </div>
+        <label class="vol">🔈<input id="volume" type="range" min="0" max="100" aria-label="Volume">🔊</label>
+      </div>
+      <div class="music-main">
+        <div class="tabs" id="music-tabs">
+          <button data-tab="favorites">★ Favorites</button>
+          <button data-tab="browse">📻 Radio</button>
+          <button data-tab="files">🎵 My files</button>
+        </div>
+        <form id="radio-search" class="search" autocomplete="off" hidden>
+          <input type="search" placeholder="Search stations, genres, cities…" enterkeyhint="search" aria-label="Search radio">
+          <button class="btn primary" type="submit">Search</button>
+        </form>
+        <div id="music-list" class="list"></div>
+        <input type="file" id="file-input" accept="audio/*" multiple hidden>
+      </div>
+    </section>
+
+    <!-- PHONE -->
+    <section class="view view-phone" id="view-phone" hidden>
+      <div class="card dialer">
+        <div id="dial-display" class="dial-display">Enter number</div>
+        <div id="dial-pad" class="dial-pad">
+          <button data-key="1">1</button><button data-key="2">2</button><button data-key="3">3</button>
+          <button data-key="4">4</button><button data-key="5">5</button><button data-key="6">6</button>
+          <button data-key="7">7</button><button data-key="8">8</button><button data-key="9">9</button>
+          <button data-key="*">*</button><button data-key="0">0</button><button data-key="#">#</button>
+          <button data-key="+">+</button>
+          <button data-key="call" class="call" aria-label="Call">📞</button>
+          <button data-key="back" aria-label="Delete">⌫</button>
+        </div>
+      </div>
+      <div class="card contacts">
+        <h2>Favorite contacts</h2>
+        <div id="contact-list" class="list"></div>
+        <form id="contact-form" class="row add-contact" autocomplete="off">
+          <input name="name" placeholder="Name" required aria-label="Contact name">
+          <input name="number" type="tel" placeholder="Number" required aria-label="Phone number">
+          <button class="btn primary" type="submit">Add</button>
+        </form>
+        <p class="muted small">Calls go through the stereo's Bluetooth hands-free. Pair your phone with the stereo over Bluetooth first.</p>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="view view-settings" id="view-settings" hidden>
+      <div class="settings-grid">
+        <div class="card pair-card">
+          <h2>Pair your phone</h2>
+          <div class="pair">
+            <div id="pair-qr" class="qr"></div>
+            <div>
+              <p>Scan this code with your phone's camera (Android or iPhone). It opens the Car-Auto remote.</p>
+              <p class="muted">Or open the app on your phone and enter this code:</p>
+              <div class="pair-code" id="pair-code">----</div>
+              <p id="pair-status" class="muted">Starting…</p>
+              <button class="btn" id="btn-new-code">New code</button>
+            </div>
+          </div>
+          <p class="muted small break" id="pair-url"></p>
+        </div>
+
+        <div class="card">
+          <h2>General</h2>
+          <label class="field">Car name<input id="set-carname" maxlength="30"></label>
+          <label class="field">Units
+            <select id="set-units"><option value="km">Kilometers (km/h)</option><option value="mi">Miles (mph)</option></select>
+          </label>
+          <label class="field">Theme
+            <select id="set-theme"><option value="auto">Auto (night after sunset)</option><option value="night">Night</option><option value="day">Day</option></select>
+          </label>
+          <label class="field">GPS source
+            <select id="set-gps">
+              <option value="auto">Auto (phone GPS when shared, else stereo)</option>
+              <option value="device">Stereo GPS only</option>
+              <option value="phone">Phone GPS only</option>
+            </select>
+          </label>
+          <label class="switch"><input type="checkbox" id="set-voice"> Voice guidance</label>
+          <label class="switch"><input type="checkbox" id="set-awake"> Keep screen on</label>
+          <label class="switch"><input type="checkbox" id="set-demo"> Demo drive (simulate driving along routes)</label>
+          <div class="row">
+            <button class="btn" id="btn-fullscreen">⛶ Fullscreen</button>
+            <button class="btn primary" id="btn-install" hidden>Install app</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Saved places</h2>
+          <div class="place" id="place-home" data-place="home">
+            <div><b>🏠 Home</b> <span class="muted place-val">Not set</span></div>
+            <form class="row"><input name="q" placeholder="Search address"><button class="btn" type="submit">Set</button></form>
+            <div class="row"><button class="btn small" data-act="here" type="button">Use current location</button><button class="btn small" data-act="clear" type="button">Clear</button></div>
+          </div>
+          <div class="place" id="place-work" data-place="work">
+            <div><b>💼 Work</b> <span class="muted place-val">Not set</span></div>
+            <form class="row"><input name="q" placeholder="Search address"><button class="btn" type="submit">Set</button></form>
+            <div class="row"><button class="btn small" data-act="here" type="button">Use current location</button><button class="btn small" data-act="clear" type="button">Clear</button></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Advanced</h2>
+          <label class="field">Own pairing server (optional)
+            <input id="set-server" placeholder="https://your-peerjs-server:443/" inputmode="url">
+          </label>
+          <p class="muted small">Leave empty to use the free public PeerJS server. Phones pick this up from the QR code.</p>
+          <button class="btn danger" id="btn-reset">Erase all data</button>
+          <p class="muted small">Maps © OpenStreetMap contributors · Routing by OSRM · Radio directory by radio-browser.info · Weather by Open-Meteo</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="voice-overlay" class="overlay" hidden>
+    <div class="voice-box">
+      <div class="pulse">🎤</div>
+      <div id="voice-transcript">Listening…</div>
+      <div class="muted small">Try “Navigate to the airport”, “Play jazz radio”, “Call Mom”, “Go home”</div>
+    </div>
+  </div>
+
+  <div id="message-overlay" class="overlay" hidden>
+    <div class="message-box">
+      <div class="muted">💬 Message from <span class="from"></span></div>
+      <div class="body"></div>
+      <div class="muted small">Tap to dismiss</div>
+    </div>
+  </div>
+
+  <script src="vendor/leaflet/leaflet.js"></script>
+  <script src="vendor/peerjs/peerjs.min.js"></script>
+  <script src="vendor/qrcode/qrcode.js"></script>
+  <script type="module" src="js/car/app.js"></script>
+</body>
+</html>

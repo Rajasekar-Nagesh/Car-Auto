@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0f14">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Car Remote">
+  <title>Car-Auto Remote</title>
+  <link rel="manifest" href="manifest-phone.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body class="phone night">
+  <header class="phone-header">
+    <div>
+      <h1>Car-Auto Remote</h1>
+      <div id="status" class="status-pill">Not paired</div>
+    </div>
+    <button class="icon-btn" id="btn-menu" aria-label="Settings">⚙︎</button>
+  </header>
+
+  <!-- Not paired -->
+  <section id="pair-view" class="stack" hidden>
+    <div class="card">
+      <h2>Pair with your car</h2>
+      <ol class="steps">
+        <li>Open <b>Car-Auto Dash</b> on your car stereo.</li>
+        <li>Go to <b>Settings → Pair your phone</b>.</li>
+        <li>Scan the QR code with your phone camera, or type the code below.</li>
+      </ol>
+      <form id="pair-form" class="row" autocomplete="off">
+        <input name="code" placeholder="XXXX-XXXX" maxlength="9" autocapitalize="characters" aria-label="Pairing code" required>
+        <button class="btn primary" type="submit">Pair</button>
+      </form>
+    </div>
+    <div class="card muted small">
+      Tip: turn on your phone's Wi-Fi hotspot and connect the stereo to it, so both have internet in the car.
+    </div>
+  </section>
+
+  <!-- Paired -->
+  <section id="remote-view" class="stack" hidden>
+    <div class="card" id="nav-card">
+      <h2>Navigation</h2>
+      <div id="nav-status" class="nav-status muted">Not navigating</div>
+      <form id="dest-form" class="row" autocomplete="off">
+        <input name="q" type="search" placeholder="Search place, paste a Maps link…" enterkeyhint="search" aria-label="Destination">
+        <button class="btn primary" type="submit">Search</button>
+      </form>
+      <div id="dest-results" class="results-inline"></div>
+      <div class="row wrap">
+        <button class="btn" data-place="home">🏠 Home</button>
+        <button class="btn" data-place="work">💼 Work</button>
+        <button class="btn" id="btn-paste">📋 Paste link</button>
+        <button class="btn danger" id="btn-stop-nav" hidden>End route</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Music in the car</h2>
+      <div class="np-row">
+        <div class="art">🎵</div>
+        <div class="meta"><b id="np-title">Nothing playing</b><span class="muted" id="np-sub"></span></div>
+      </div>
+      <div class="controls">
+        <button class="ctl" data-media="prev" aria-label="Previous">⏮</button>
+        <button class="ctl main" data-media="toggle" id="np-toggle" aria-label="Play">▶</button>
+        <button class="ctl" data-media="next" aria-label="Next">⏭</button>
+      </div>
+      <label class="vol">🔈<input id="np-volume" type="range" min="0" max="100" aria-label="Car volume">🔊</label>
+    </div>
+
+    <div class="card">
+      <h2>Share my GPS</h2>
+      <label class="switch"><input type="checkbox" id="gps-toggle"> Use this phone's GPS for car navigation</label>
+      <p id="gps-status" class="muted small">Useful if the stereo has no GPS or a weak signal. Keep this screen open while driving.</p>
+    </div>
+
+    <div class="card">
+      <h2>Send a message to the car</h2>
+      <form id="say-form" autocomplete="off">
+        <textarea name="text" rows="2" placeholder="e.g. Pick up milk on the way" aria-label="Message"></textarea>
+        <button class="btn primary wide" type="submit">Show &amp; read aloud in car</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- Settings sheet -->
+  <dialog id="menu" class="sheet">
+    <form method="dialog" class="stack">
+      <h2>Settings</h2>
+      <label class="field">Phone name (shown in the car)<input id="set-name" maxlength="30"></label>
+      <div id="paired-info" class="muted small"></div>
+      <button class="btn" type="button" id="btn-install-help">How to install on this phone</button>
+      <button class="btn danger" type="button" id="btn-unpair">Unpair from car</button>
+      <button class="btn primary" value="close">Done</button>
+    </form>
+  </dialog>
+
+  <dialog id="install-help" class="sheet">
+    <form method="dialog" class="stack">
+      <h2>Install the remote</h2>
+      <p><b>iPhone (Safari):</b> tap the Share button, then <b>Add to Home Screen</b>.</p>
+      <p><b>Android (Chrome):</b> tap ⋮ then <b>Install app</b> or <b>Add to Home screen</b>. Once installed, you can share a place from Google Maps straight to <b>Car Remote</b>.</p>
+      <button class="btn primary" value="close">OK</button>
+    </form>
+  </dialog>
+
+  <script src="vendor/peerjs/peerjs.min.js"></script>
+  <script type="module" src="js/phone/app.js"></script>
+</body>
+</html>
