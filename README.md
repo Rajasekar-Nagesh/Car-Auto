@@ -25,6 +25,19 @@ It comes in two parts. Each one is available as an Android app (full experience)
 | Voice commands: "Navigate to…", "Play jazz radio", "Call Mom", "Answer", "Open Spotify" | — |
 | Send destinations and messages from the phone, share phone GPS | Either phone app |
 
+## Real Android Auto (optional, recommended)
+
+Car-Auto works together with **[Open Headunit](https://github.com/andreknieriem/open-headunit)**, a free open-source app that turns an Android stereo into a genuine **Android Auto receiver**. Your phone then projects real Android Auto onto the stereo: Google Maps, Waze, Spotify, WhatsApp, Assistant and calls, exactly like a factory unit.
+
+1. On the stereo, install Open Headunit from its [Releases page](https://github.com/andreknieriem/open-headunit/releases) (or Google Play).
+2. In Car-Auto, tap **Android Auto** in the app grid, or say **"Start Android Auto"**.
+3. Connect the phone by USB (the stereo needs a USB host port), or use one of Open Headunit's wireless options. Note: its README says wireless on Android Auto 17.4+ needs a USB dongle, root or its server mode.
+4. Press the stereo's Home button to come back to Car-Auto. This works best with Car-Auto set as the home screen.
+
+Open Headunit is a separate AGPL-3.0 project. Car-Auto only launches it and contains none of its code.
+
+When to use which: **Android Auto** gives you your phone's own apps on the screen. **Car-Auto** works without a USB connection, works with iPhones (web remote), and adds radio, local music, a launcher for the stereo's own apps, and auto-start.
+
 ## The car screen
 
 * **Taskbar** on the left: clock; Dashboard, Maps, Music and Phone; notifications, the app grid and the microphone. On portrait screens it moves to the bottom.

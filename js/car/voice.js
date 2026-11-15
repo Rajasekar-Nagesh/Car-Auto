@@ -24,6 +24,7 @@ export function parseCommand(text) {
   if (/what time is it|what's the time|tell me the time/.test(t)) return { cmd: 'time' };
   if (/how (long|far)|when (will|do) (we|i) arrive|eta/.test(t)) return { cmd: 'eta' };
   if (/^(open |show )?(the )?(map|music|phone|home|settings)$/.test(t)) return { cmd: 'view', view: t.match(/(map|music|phone|home|settings)/)[1] };
+  if (/^(start|open|launch|connect)( to)? android auto$/.test(t)) return { cmd: 'androidAuto' };
   if ((m = t.match(/^(?:open|launch|start) (.+)$/))) return { cmd: 'openApp', name: m[1] };
   return { cmd: 'unknown', text: t };
 }
@@ -62,6 +63,7 @@ export function createVoice(ctx) {
       }
       case 'view': return ctx.showView(c.view);
       case 'callAction': return ctx.calls.action(c.action);
+      case 'androidAuto': return ctx.startAndroidAuto();
       case 'openApp':
         if (!ctx.openStereoApp?.(c.name)) ctx.voice(`I couldn't find an app called ${c.name}.`);
         return;

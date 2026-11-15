@@ -321,6 +321,11 @@ async function mockNetwork(context) {
     await dash.screenshot({ path: `${SHOTS}/dash-apps.png` });
     await dash.click('#stereo-apps .launch:nth-child(3)');
     check((await dash.evaluate(() => window.__log)).includes('launch:com.waze'), 'tapping an app launches it');
+    await dash.click('.taskbar [data-view=apps]');
+    await dash.click('[data-open=aa]');
+    check((await dash.evaluate(() => window.__log)).includes('launch:com.andrerinas.headunitrevived'), 'Android Auto tile opens Open Headunit');
+    const aaVoice = await dash.evaluate(async () => (await import('./js/car/voice.js')).parseCommand('Start Android Auto').cmd);
+    check(aaVoice === 'androidAuto', 'voice: "start Android Auto"');
     check(await dash.evaluate(() => window.carauto.back()) === true, 'Back key closes the open app');
     check(await dash.evaluate(() => window.carauto.back()) === false, 'Back on the dashboard is ignored (launcher stays)');
     await dash.click('#btn-voice');

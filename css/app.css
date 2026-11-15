@@ -266,6 +266,7 @@ body.buffering .ctl.main { animation: breathe 0.9s infinite alternate; }
 .ic { width: 88px; height: 88px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
 .ic svg { width: 44px; height: 44px; fill: #fff; }
 .ic-maps { background: #188038; }
+.ic-aa { background: linear-gradient(135deg, #4285f4, #34a853); }
 .ic-music { background: #e8710a; }
 .ic-radio { background: #c5221f; }
 .ic-phone { background: #1a73e8; }

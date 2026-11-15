@@ -148,8 +148,25 @@ $('#view-apps').addEventListener('click', (e) => {
   if (open === 'voice') { showView('home'); voice.listen(); return; }
   if (open === 'fullscreen') { toggleFullscreen(); return; }
   if (open === 'radio') { showView('music'); music.openTab('browse'); return; }
+  if (open === 'aa') { startAndroidAuto(); return; }
   showView(open);
 });
+
+// Real Android Auto projection is provided by the free Open Headunit app
+// (github.com/andreknieriem/open-headunit), launched as a separate app.
+const AA_PKG = 'com.andrerinas.headunitrevived';
+const AA_DOWNLOAD = 'https://github.com/andreknieriem/open-headunit/releases';
+function startAndroidAuto() {
+  if (native?.launchApp && native.launchApp(AA_PKG)) {
+    toast('Starting Android Auto… connect your phone by USB or wireless');
+    return true;
+  }
+  ctx.voice('To use Android Auto, install the Open Headunit app on this stereo.');
+  toast('Install the free Open Headunit app on this stereo for real Android Auto', 6000);
+  openExternal(AA_DOWNLOAD);
+  return false;
+}
+ctx.startAndroidAuto = startAndroidAuto;
 
 // Apps installed on the stereo (Android app) or quick links (browser).
 const WEB_APPS = [
@@ -182,6 +199,7 @@ $('#stereo-apps').addEventListener('click', (e) => {
   else openExternal(WEB_APPS[+b.dataset.web].url);
 });
 ctx.openStereoApp = (name) => {
+  if (/^(android auto|headunit|open headunit)$/i.test(name.trim())) { startAndroidAuto(); return true; }
   if (!native?.listApps) return false;
   renderStereoApps();
   const q = name.toLowerCase();
