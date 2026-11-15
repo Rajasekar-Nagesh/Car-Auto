@@ -13,6 +13,23 @@ There's no app store and no account. It's one web app you install from the brows
 | **Voice commands**: "Navigate to…", "Play jazz radio", "Call Mom", "Go home" | Send a message that's shown and read aloud in the car |
 | Steering-wheel media buttons, day/night theme, works offline for recently seen map areas | **Share phone GPS** with the car if the stereo has no GPS or a weak signal |
 
+## The car screen
+
+The layout follows the familiar phone-projection style:
+
+* **Taskbar** on the left: clock; Dashboard, Maps, Music and Phone; notifications, the app grid and the microphone. On portrait screens it moves to the bottom.
+* **Split-screen dashboard**: the live map on the left, with a media card and a context card on the right. The context card shows weather and suggested destinations, or your next turns while navigating.
+* **Full-screen apps**: Music (favorites, radio, your files), Phone (favorites and keypad), Notifications and Settings, plus an **app grid**. The stereo's **Back** button closes an app and returns to the dashboard.
+* Tap ⛶ on the map to go **full-screen map**. Messages from your phone drop down as **heads-up notifications**.
+
+### Built for speed
+
+* The map is created once and keeps running behind every app, so switching screens is instant.
+* The car marker glides smoothly between GPS fixes at the screen's refresh rate. Map lines are drawn on a canvas.
+* App files come from the offline cache straight away and update in the background. Measured with the CPU slowed 4× (like a budget stereo): first paint in about 0.2 s, then about 0.08 s on later launches. Opening an app takes about 35 ms.
+* The connection library and QR generator load only when needed, and weather loads after the screen appears.
+* Screens only redraw when something actually changes.
+
 ## How it works
 
 ```

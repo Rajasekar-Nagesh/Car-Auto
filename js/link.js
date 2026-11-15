@@ -12,6 +12,26 @@ const PREFIX = 'carauto-v1-';
 const HEARTBEAT_MS = 8000;
 const STALE_MS = 25000;
 
+// Load a classic script once, on demand (keeps startup fast).
+const scriptLoads = new Map();
+export function loadScript(src, ready = () => false) {
+  if (ready()) return Promise.resolve();
+  if (!scriptLoads.has(src)) {
+    scriptLoads.set(src, new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = src;
+      s.async = true;
+      s.onload = () => resolve();
+      s.onerror = () => { scriptLoads.delete(src); s.remove(); reject(new Error(`Failed to load ${src}`)); };
+      document.head.appendChild(s);
+    }));
+  }
+  return scriptLoads.get(src);
+}
+
+const PEERJS_URL = new URL('../vendor/peerjs/peerjs.min.js', import.meta.url).href;
+export const loadPeerJs = () => loadScript(PEERJS_URL, () => !!window.Peer);
+
 export function peerIdFor(code) {
   return PREFIX + String(code).toLowerCase().replace(/[^a-z0-9]/g, '');
 }
@@ -134,7 +154,12 @@ export class CarHost extends Base {
 
   _startPeer() {
     if (!window.Peer) {
-      this._status('error', 'Connection library failed to load');
+      this._status('connecting');
+      loadPeerJs().then(() => !this._stopped && this._startPeer()).catch(() => {
+        this._status('error', 'Connection library failed to load. Retrying…');
+        clearTimeout(this._retry);
+        this._retry = setTimeout(() => this._startPeer(), 5000);
+      });
       return;
     }
     const peer = new window.Peer(peerIdFor(this.code), peerOptions(this.server));
@@ -269,7 +294,13 @@ export class PhoneClient extends Base {
     if (this._stopped || this.connected) return;
     this._status('connecting');
     if (this.transport === 'local') return this._connectLocal();
-    if (!window.Peer) return this._status('error', 'Connection library failed to load');
+    if (!window.Peer) {
+      loadPeerJs().then(() => this._connect()).catch(() => {
+        this._status('error', 'Connection library failed to load. Retrying…');
+        this._scheduleRetry();
+      });
+      return;
+    }
 
     if (!this.peer || this.peer.destroyed) {
       const peer = new window.Peer(peerOptions(this.server));

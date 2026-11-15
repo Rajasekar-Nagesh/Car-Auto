@@ -87,10 +87,15 @@ async function mockNetwork(context) {
     check(true, 'weather tile shows temperature');
     await car.screenshot({ path: `${SHOTS}/car-home.png` });
 
-    await car.click('.rail [data-view=settings]');
+    await car.click('.taskbar [data-view=apps]');
+    check(await car.locator('.launch').count() >= 6, 'app launcher grid shows apps');
+    await car.waitForTimeout(250);
+    await car.screenshot({ path: `${SHOTS}/car-apps.png` });
+    await car.click('[data-open=settings]');
+    await car.waitForSelector('#pair-qr svg');
     const code = (await car.textContent('#pair-code')).trim();
     check(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(code), `pairing code shown (${code})`);
-    check(await car.locator('#pair-qr svg').count() === 1, 'QR code rendered');
+    check(await car.locator('#pair-qr svg').count() === 1, 'QR code rendered (lazy-loaded)');
     await car.screenshot({ path: `${SHOTS}/car-settings.png` });
 
     // Voice command parser
@@ -137,7 +142,12 @@ async function mockNetwork(context) {
     await car.click('#contact-form button');
     check(await car.locator('.contact').count() === 1, 'favorite contact added');
     await car.screenshot({ path: `${SHOTS}/car-phone.png` });
-    await car.click('.rail [data-view=home]');
+    await car.click('[data-ptab=keypad]');
+    await car.screenshot({ path: `${SHOTS}/car-keypad.png` });
+    await car.click('[data-ptab=contacts]');
+    await car.goBack();
+    await car.waitForSelector('#view-phone', { state: 'hidden' });
+    check(true, 'Android back button returns to the dashboard');
     check(await car.locator('#quick-contacts .quick').count() === 1, 'contact appears in quick dial');
 
     // ---------------- Phone remote ----------------
@@ -171,6 +181,12 @@ async function mockNetwork(context) {
     const d1 = await car.textContent('#maneuver .dist');
     check(/^(80|90|100) m$/.test(d1.trim()), `distance to turn updates from phone GPS (${d1.trim()})`);
     await car.screenshot({ path: `${SHOTS}/car-navigating.png` });
+    check(await car.locator('#tile-nav .step').count() >= 1, 'dashboard card lists upcoming turns');
+    await car.click('#btn-expand');
+    await car.waitForTimeout(200);
+    await car.screenshot({ path: `${SHOTS}/car-map-full.png` });
+    check(await car.evaluate(() => document.body.classList.contains('map-full')), 'map expands to full screen');
+    await car.click('#btn-expand');
     await phone.screenshot({ path: `${SHOTS}/phone-remote.png`, fullPage: true });
 
     await send(12.9743, 77.5960);
@@ -185,6 +201,9 @@ async function mockNetwork(context) {
     await phone.fill('#say-form textarea', 'Pick up milk');
     await phone.click('#say-form button');
     await car.waitForSelector('#message-overlay:not([hidden])');
+    await car.waitForTimeout(300);
+    await car.screenshot({ path: `${SHOTS}/car-notification.png` });
+    check(await car.textContent('#msg-badge') === '1', 'notification badge on taskbar');
     check((await car.textContent('#message-overlay .body')) === 'Pick up milk', 'message from phone shown in car');
     await car.click('#message-overlay');
 

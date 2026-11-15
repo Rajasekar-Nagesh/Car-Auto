@@ -147,19 +147,38 @@ export function createNav(ctx) {
   const L = window.L;
   const { settings } = ctx;
   const last = store.get('lastPos', null);
-  const map = L.map('map', { zoomControl: false, attributionControl: true })
-    .setView(last ? [last.lat, last.lon] : [20, 0], last ? 16 : 2);
+  // Canvas renderer + no tile fade: far less DOM work on slow head units.
+  const map = L.map('map', {
+    zoomControl: false,
+    attributionControl: true,
+    preferCanvas: true,
+    fadeAnimation: false,
+    zoomSnap: 0.5,
+    inertia: true,
+    tapTolerance: 20,
+  }).setView(last ? [last.lat, last.lon] : [20, 0], last ? 16 : 2);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
+    keepBuffer: 4,
+    updateWhenIdle: false,
+    updateWhenZooming: false,
     attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   }).addTo(map);
 
-  const carIcon = L.divIcon({ className: 'car-marker', html: '<div class="car-arrow"></div>', iconSize: [44, 44], iconAnchor: [22, 22] });
+  const carIcon = L.divIcon({
+    className: 'car-marker',
+    html: '<div class="car-arrow"><svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="22" fill="#fff" opacity=".18"/><path d="M24 6 39 40 24 32 9 40Z" fill="#4c8df6" stroke="#fff" stroke-width="3" stroke-linejoin="round"/></svg></div>',
+    iconSize: [48, 48],
+    iconAnchor: [24, 24],
+  });
   let carMarker = null;
   let routeLine = null;
+  let routeCasing = null;
   let doneLine = null;
   let destMarker = null;
   let previewLine = null;
+  const ROUTE_STYLE = { color: '#4c8df6', weight: 8, opacity: 1, lineCap: 'round', lineJoin: 'round' };
+  const CASING_STYLE = { color: '#1a4fa8', weight: 12, opacity: 1, lineCap: 'round', lineJoin: 'round' };
 
   let pos = null;
   let follow = true;
@@ -173,6 +192,7 @@ export function createNav(ctx) {
   let announced = {};
   let lastPhoneFix = 0;
   let pendingDest = null;
+  let doneIdx = -1;
   let sim = null;
 
   const el = {
@@ -190,7 +210,7 @@ export function createNav(ctx) {
     results: $('#nav-results'),
     previewCard: $('#route-preview'),
     recenter: $('#btn-recenter'),
-    speed: $('#map-speed'),
+    speedVal: $('#map-speed b'),
   };
 
   // ---- Positioning ----
@@ -243,17 +263,54 @@ export function createNav(ctx) {
     );
   }
 
+  // Smoothly glide the car marker (and the camera) between GPS fixes at
+  // display refresh rate, instead of jumping once per second.
+  let shown = null;
+  let animFrame = 0;
+  let lastFixAt = 0;
+  let arrowEl = null;
+  let lastHeading = null;
+  let rotation = 0;
+  function glideTo(target) {
+    const now = performance.now();
+    const dt = lastFixAt ? now - lastFixAt : 0;
+    lastFixAt = now;
+    const from = shown || target;
+    const jump = haversine({ lat: from[0], lon: from[1] }, { lat: target[0], lon: target[1] });
+    const dur = jump > 300 || !shown ? 0 : Math.min(1100, Math.max(250, dt));
+    cancelAnimationFrame(animFrame);
+    const t0 = now;
+    const frame = (t) => {
+      const k = dur ? Math.min(1, (t - t0) / dur) : 1;
+      shown = [from[0] + (target[0] - from[0]) * k, from[1] + (target[1] - from[1]) * k];
+      carMarker.setLatLng(shown);
+      if (follow && ctx.mapVisible()) {
+        if (map.getZoom() < 14) map.setView(shown, 16, { animate: false });
+        else map.panTo(shown, { animate: false, noMoveStart: true });
+      }
+      if (k < 1) animFrame = requestAnimationFrame(frame);
+    };
+    animFrame = requestAnimationFrame(frame);
+  }
+
   let lastSave = 0;
+  let lastSpeedText = '';
   function onPosition() {
     const ll = [pos.lat, pos.lon];
-    if (!carMarker) carMarker = L.marker(ll, { icon: carIcon, interactive: false, zIndexOffset: 1000 }).addTo(map);
-    else carMarker.setLatLng(ll);
-    const arrow = carMarker.getElement()?.querySelector('.car-arrow');
-    if (arrow) arrow.style.transform = `rotate(${pos.heading || 0}deg)`;
-    if (follow && ctx.isViewVisible('map')) {
-      map.setView(ll, map.getZoom() < 14 ? 16 : map.getZoom(), { animate: true });
+    if (!carMarker) {
+      carMarker = L.marker(ll, { icon: carIcon, interactive: false, zIndexOffset: 1000, keyboard: false }).addTo(map);
+      arrowEl = carMarker.getElement()?.querySelector('.car-arrow');
     }
-    el.speed.querySelector('b').textContent = ctx.speedText(pos.speed);
+    glideTo(ll);
+    const heading = Math.round(pos.heading || 0);
+    if (arrowEl && heading !== lastHeading) {
+      // accumulate rotation so 359°→1° turns 2°, not a full spin
+      rotation = lastHeading == null ? heading : rotation + ((heading - lastHeading + 540) % 360) - 180;
+      lastHeading = heading;
+      arrowEl.style.transform = `rotate(${rotation}deg)`;
+    }
+    const st = ctx.speedText(pos.speed);
+    if (st !== lastSpeedText) { lastSpeedText = st; el.speedVal.textContent = st; }
     if (Date.now() - lastSave > 30000) {
       lastSave = Date.now();
       store.set('lastPos', { lat: pos.lat, lon: pos.lon });
@@ -302,7 +359,7 @@ export function createNav(ctx) {
       return;
     }
     previewLine?.remove();
-    previewLine = L.polyline(preview.coords, { color: '#3d8bfd', weight: 8, opacity: 0.8 }).addTo(map);
+    previewLine = L.polyline(preview.coords, { ...ROUTE_STYLE, opacity: 0.85 }).addTo(map);
     destMarker?.remove();
     destMarker = L.marker([dest.lat, dest.lon]).addTo(map);
     follow = false;
@@ -341,9 +398,12 @@ export function createNav(ctx) {
     announced = {};
     progress = null;
     routeLine?.remove();
+    routeCasing?.remove();
     doneLine?.remove();
-    routeLine = L.polyline(r.coords, { color: '#3d8bfd', weight: 9, opacity: 0.9 }).addTo(map);
-    doneLine = L.polyline([], { color: '#7a8796', weight: 9, opacity: 0.7 }).addTo(map);
+    routeCasing = L.polyline(r.coords, CASING_STYLE).addTo(map);
+    routeLine = L.polyline(r.coords, ROUTE_STYLE).addTo(map);
+    doneLine = L.polyline([], { color: '#8a9099', weight: 8, opacity: 1, lineCap: 'round' }).addTo(map);
+    doneIdx = -1;
     destMarker?.remove();
     destMarker = L.marker([r.dest.lat, r.dest.lon]).addTo(map);
     follow = true;
@@ -367,9 +427,10 @@ export function createNav(ctx) {
     progress = null;
     pendingDest = null;
     routeLine?.remove();
+    routeCasing?.remove();
     doneLine?.remove();
     destMarker?.remove();
-    routeLine = doneLine = destMarker = null;
+    routeLine = routeCasing = doneLine = destMarker = null;
     el.banner.hidden = true;
     el.trip.hidden = true;
     document.body.classList.remove('navigating');
@@ -424,18 +485,21 @@ export function createNav(ctx) {
     const afterNext = route.steps[nextIdx + 1];
     const remainingSec = route.duration * (remaining / route.total);
 
-    progress = { stepIdx: nextIdx, toNext, remaining, remainingSec, next, afterNext };
+    progress = { stepIdx: nextIdx, toNext, remaining, remainingSec, next, afterNext, travelled: loc.travelled };
 
-    el.arrow.innerHTML = arrowFor(next);
-    el.dist.textContent = fmtDist(toNext, settings.units);
-    el.text.textContent = next.text;
+    if (el.arrow._step !== next) { el.arrow._step = next; el.arrow.innerHTML = arrowFor(next); }
+    setText(el.dist, fmtDist(toNext, settings.units));
+    setText(el.text, next.text);
     el.then.hidden = !(afterNext && route.cum[afterNext.startIdx] - route.cum[next.startIdx] < 150);
     if (!el.then.hidden) el.then.innerHTML = `Then ${arrowFor(afterNext)}`;
-    el.remain.textContent = fmtDist(remaining, settings.units);
-    el.time.textContent = fmtDuration(remainingSec);
-    el.eta.textContent = fmtClock(new Date(Date.now() + remainingSec * 1000));
+    setText(el.remain, fmtDist(remaining, settings.units));
+    setText(el.time, fmtDuration(remainingSec));
+    setText(el.eta, fmtClock(new Date(Date.now() + remainingSec * 1000)));
 
-    doneLine.setLatLngs(route.coords.slice(0, loc.seg + 1).concat([[pos.lat, pos.lon]]));
+    if (loc.seg !== doneIdx) {
+      doneIdx = loc.seg;
+      doneLine.setLatLngs(route.coords.slice(0, loc.seg + 1).concat([[pos.lat, pos.lon]]));
+    }
 
     // Voice prompts: far / near / now, once per step.
     const a = (announced[nextIdx] ||= {});
@@ -458,6 +522,7 @@ export function createNav(ctx) {
   }
 
   const lowerFirst = (s) => s.charAt(0).toLowerCase() + s.slice(1);
+  const setText = (node, t) => { if (node.textContent !== t) node.textContent = t; };
 
   // ---- Demo drive: follows the active route at ~50 km/h ----
 
@@ -533,6 +598,7 @@ export function createNav(ctx) {
     const list = store.get('recents', []).filter((p) => p.label !== place.label);
     list.unshift({ name: place.name, label: place.label, lat: place.lat, lon: place.lon });
     store.set('recents', list.slice(0, 8));
+    ctx.bus.emit('recents');
   }
 
   function renderRecents() {
@@ -552,7 +618,7 @@ export function createNav(ctx) {
   // ---- Public API ----
 
   function navigateTo(dest, { immediate = false } = {}) {
-    ctx.showView('map');
+    ctx.showMap();
     if (!dest.label) dest.label = `${dest.lat.toFixed(5)}, ${dest.lon.toFixed(5)}`;
     if (!dest.name) dest.name = dest.label.split(',')[0];
     if (immediate) {
@@ -565,7 +631,7 @@ export function createNav(ctx) {
   }
 
   async function searchAndGo(q, { immediate = false } = {}) {
-    ctx.showView('map');
+    ctx.showMap();
     el.searchInput.value = q;
     const rows = await runSearch(q);
     if (rows?.length) {
@@ -587,11 +653,26 @@ export function createNav(ctx) {
       remaining: progress?.remaining ?? route.total,
       eta: Date.now() + (progress?.remainingSec ?? route.duration) * 1000,
       toNextText: progress ? fmtDist(progress.toNext, settings.units) : '',
+      upcoming: progress
+        ? route.steps.slice(progress.stepIdx, progress.stepIdx + 3).map((step) => ({ step, at: Math.max(0, route.cum[step.startIdx] - progress.travelled) }))
+        : route.steps.slice(1, 4).map((step) => ({ step, at: route.cum[step.startIdx] })),
       remainingText: fmtDist(progress?.remaining ?? route.total, settings.units),
     };
   }
 
   $('#btn-stop-nav').addEventListener('click', () => stop());
+
+  // Keep Leaflet in sync when the pane changes size (split ↔ full screen).
+  if ('ResizeObserver' in window) {
+    let raf = 0;
+    new ResizeObserver(() => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        map.invalidateSize({ pan: false });
+        if (shown && follow) map.setView(shown, map.getZoom(), { animate: false });
+      });
+    }).observe(document.getElementById('map'));
+  }
 
   startDeviceGps();
 
@@ -608,10 +689,10 @@ export function createNav(ctx) {
       if (!on) stopSim();
     },
     refresh() {
-      setTimeout(() => {
-        map.invalidateSize();
-        if (pos && follow) map.setView([pos.lat, pos.lon], map.getZoom() < 14 ? 16 : map.getZoom());
-      }, 50);
+      requestAnimationFrame(() => {
+        map.invalidateSize({ pan: false });
+        if (shown && follow) map.setView(shown, map.getZoom() < 14 ? 16 : map.getZoom(), { animate: false });
+      });
     },
     destroy() {
       if (watchId != null) navigator.geolocation.clearWatch(watchId);

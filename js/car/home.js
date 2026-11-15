@@ -1,10 +1,12 @@
-// Home dashboard tiles: clock, speed, weather, next turn, now playing,
-// quick-dial contacts and phone link status.
+// Dashboard context card (right side of the split screen) + taskbar clock.
+// Idle: weather, destination suggestions, quick dial, phone status.
+// Navigating: upcoming turns. All renders are skipped when nothing changed.
 
-import { $, fetchJSON, fmtClock, escapeHtml } from '../common.js';
+import { $, store, fetchJSON, fmtClock, fmtDist, escapeHtml } from '../common.js';
+import { arrowFor } from './nav.js';
 
 const WEATHER = {
-  0: ['☀️', 'Clear'], 1: ['🌤️', 'Mostly clear'], 2: ['⛅', 'Partly cloudy'], 3: ['☁️', 'Overcast'],
+  0: ['☀️', 'Clear'], 1: ['🌤️', 'Mostly clear'], 2: ['⛅', 'Partly cloudy'], 3: ['☁️', 'Cloudy'],
   45: ['🌫️', 'Fog'], 48: ['🌫️', 'Fog'], 51: ['🌦️', 'Drizzle'], 53: ['🌦️', 'Drizzle'], 55: ['🌦️', 'Drizzle'],
   61: ['🌧️', 'Rain'], 63: ['🌧️', 'Rain'], 65: ['🌧️', 'Heavy rain'], 66: ['🌧️', 'Freezing rain'], 67: ['🌧️', 'Freezing rain'],
   71: ['🌨️', 'Snow'], 73: ['🌨️', 'Snow'], 75: ['❄️', 'Heavy snow'], 77: ['🌨️', 'Snow'],
@@ -12,29 +14,30 @@ const WEATHER = {
   95: ['⛈️', 'Thunderstorm'], 96: ['⛈️', 'Thunderstorm'], 99: ['⛈️', 'Thunderstorm'],
 };
 
+const PIN = '<svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>';
+const HOME = '<svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>';
+const WORK = '<svg viewBox="0 0 24 24"><path d="M20 6h-4V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2zm-6 0h-4V4h4z"/></svg>';
+
 export function createHome(ctx) {
   const el = {
-    clock: $('#home-clock'),
     date: $('#home-date'),
     railClock: $('#rail-clock'),
-    speed: $('#home-speed'),
-    speedUnit: $('#home-speed-unit'),
     weather: $('#home-weather'),
     navTile: $('#tile-nav'),
     quick: $('#quick-contacts'),
     linkTile: $('#tile-link'),
   };
 
+  // ---- Clock: tick exactly on the minute boundary, no polling every second ----
   function tick() {
     const now = new Date();
-    el.clock.textContent = fmtClock(now);
     el.railClock.textContent = fmtClock(now);
-    el.date.textContent = now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+    el.date.textContent = now.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+    setTimeout(tick, 60000 - (now.getSeconds() * 1000 + now.getMilliseconds()) + 50);
   }
-  setInterval(tick, 5000);
   tick();
 
-  // ---- Weather (Open-Meteo, no API key) ----
+  // ---- Weather (Open-Meteo, no API key), deferred so it never delays startup ----
   let lastWeather = 0;
   let weatherAt = null;
   async function loadWeather(pos) {
@@ -50,63 +53,70 @@ export function createHome(ctx) {
       lastWeather = 0;
     }
   }
-
+  const cachedWeatherPos = store.get('lastPos', null);
   ctx.bus.on('pos', (pos) => {
-    el.speed.textContent = ctx.speedText(pos.speed);
-    loadWeather(pos);
+    if (!weatherAt) (window.requestIdleCallback || setTimeout)(() => loadWeather(pos));
+    else loadWeather(pos);
   });
+  if (cachedWeatherPos) (window.requestIdleCallback || setTimeout)(() => loadWeather(cachedWeatherPos), { timeout: 3000 });
 
+  // ---- Suggestions / upcoming turns ----
+  let lastNavHtml = '';
   function renderNav(state) {
     const { settings } = ctx;
+    let html;
     if (state?.active) {
-      el.navTile.innerHTML = `
-        <div class="tile-label">Navigating to ${escapeHtml(state.dest || '')}</div>
-        <div class="nav-next"><b>${escapeHtml(state.toNextText)}</b> ${escapeHtml(state.text)}</div>
-        <div class="muted">${escapeHtml(state.remainingText)} · arrive ${fmtClock(new Date(state.eta))}</div>`;
+      const upcoming = state.upcoming || [];
+      html = `<div class="tile-label">Next turns</div><div class="step-list">${upcoming.map((s) => `
+        <div class="step"><span class="s-ic">${arrowFor(s.step)}</span><b>${escapeHtml(fmtDist(s.at, settings.units))}</b><span class="muted">${escapeHtml(s.step.text)}</span></div>`).join('')}</div>`;
     } else {
-      el.navTile.innerHTML = `
-        <div class="tile-label">Where to?</div>
-        <button class="btn big wide" data-go="search">🔍 Search destination</button>
-        <div class="row">
-          <button class="btn" data-go="home">🏠 Home</button>
-          <button class="btn" data-go="work">💼 Work</button>
-        </div>
-        ${settings.home || settings.work ? '' : '<div class="muted small">Set Home and Work in Settings.</div>'}`;
+      const chips = [];
+      if (settings.home) chips.push(`<button class="chip" data-go="home">${HOME}Home</button>`);
+      if (settings.work) chips.push(`<button class="chip" data-go="work">${WORK}Work</button>`);
+      store.get('recents', []).slice(0, 3).forEach((r, i) => chips.push(`<button class="chip" data-recent="${i}">${PIN}${escapeHtml(r.name)}</button>`));
+      if (!chips.length) chips.push(`<button class="chip" data-go="search">${PIN}Where to?</button>`);
+      html = `<div class="tile-label">Suggested</div><div class="chips">${chips.join('')}</div>`;
+    }
+    if (html !== lastNavHtml) {
+      lastNavHtml = html;
+      el.navTile.innerHTML = html;
     }
   }
 
   el.navTile.addEventListener('click', (e) => {
-    const go = e.target.closest('[data-go]')?.dataset.go;
-    if (!go && ctx.nav.getState().active) return ctx.showView('map');
-    if (go === 'search') {
-      ctx.showView('map');
-      setTimeout(() => $('#nav-search input').focus(), 100);
-    } else if (go) {
-      const p = ctx.settings[go];
-      if (!p) return ctx.showView('settings');
-      ctx.nav.navigateTo({ ...p, name: go === 'home' ? 'Home' : 'Work' });
+    const b = e.target.closest('[data-go],[data-recent]');
+    if (!b) return;
+    if (b.dataset.recent != null) {
+      const r = store.get('recents', [])[+b.dataset.recent];
+      if (r) ctx.nav.navigateTo(r, { immediate: true });
+      return;
     }
+    const go = b.dataset.go;
+    if (go === 'search') {
+      ctx.showView('home');
+      $('#nav-search input').focus();
+      return;
+    }
+    const p = ctx.settings[go];
+    if (p) ctx.nav.navigateTo({ ...p, name: go === 'home' ? 'Home' : 'Work' }, { immediate: true });
   });
 
   function renderQuick(contacts) {
-    const top = contacts.slice(0, 4);
-    el.quick.innerHTML = top.length
-      ? top.map((c, i) => `<button class="quick" data-q="${i}"><span class="avatar">${escapeHtml(c.name.charAt(0).toUpperCase())}</span><span>${escapeHtml(c.name)}</span></button>`).join('')
-      : '<button class="btn" data-q="add">➕ Add favorite contacts</button>';
+    el.quick.innerHTML = contacts.slice(0, 5)
+      .map((c, i) => `<button class="quick" data-q="${i}"><span class="avatar">${escapeHtml(c.name.charAt(0).toUpperCase())}</span><span>${escapeHtml(c.name.split(' ')[0])}</span></button>`)
+      .join('');
   }
   el.quick.addEventListener('click', (e) => {
     const q = e.target.closest('[data-q]')?.dataset.q;
     if (q == null) return;
-    if (q === 'add') return ctx.showView('phone');
     const c = ctx.phone.getContacts()[+q];
     ctx.phone.call(c.number, c.name);
   });
 
   function renderLink({ count, state }) {
-    const online = state === 'online';
     el.linkTile.innerHTML = count
-      ? `<div class="tile-label">Phone remote</div><div class="link-ok">📱 ${count} phone${count > 1 ? 's' : ''} connected</div>`
-      : `<div class="tile-label">Phone remote</div><div class="${online ? '' : 'muted'}">${online ? 'Ready to pair' : 'Offline'}</div><button class="btn" data-pair>Pair a phone</button>`;
+      ? `<span class="link-ok">● ${count} phone${count > 1 ? 's' : ''} connected</span>`
+      : `<span>${state === 'online' ? 'Phone remote ready' : 'Phone remote offline'}</span><button class="btn small" data-pair>Pair phone</button>`;
   }
   el.linkTile.addEventListener('click', (e) => { if (e.target.closest('[data-pair]')) ctx.showView('settings'); });
 
@@ -114,12 +124,9 @@ export function createHome(ctx) {
   ctx.bus.on('contacts', renderQuick);
   ctx.bus.on('link', renderLink);
   renderNav({ active: false });
-  el.speedUnit.textContent = ctx.settings.units === 'mi' ? 'mph' : 'km/h';
 
   return {
-    refreshUnits() {
-      el.speedUnit.textContent = ctx.settings.units === 'mi' ? 'mph' : 'km/h';
-      lastWeather = 0;
-    },
+    refreshUnits() { lastWeather = 0; renderNav(ctx.nav.getState()); },
+    refreshSuggestions() { renderNav(ctx.nav.getState()); },
   };
 }

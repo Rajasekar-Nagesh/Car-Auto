@@ -36,6 +36,9 @@ function toStation(r) {
 // The app is served over HTTPS, so browsers block plain-HTTP streams.
 const playable = (s) => s.url && s.url.startsWith('https://');
 
+const ICON_PLAY = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>';
+const ICON_PAUSE = '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6zm8-14v14h4V5z" fill="currentColor"/></svg>';
+
 export function createMusic(ctx) {
   const audio = new Audio();
   audio.preload = 'none';
@@ -48,6 +51,9 @@ export function createMusic(ctx) {
   let current = null;
   let tab = favorites.length ? 'favorites' : 'browse';
   let browseRows = [];
+  let lastArt = null;
+  let lastPlaying = null;
+  let listDirty = true;
 
   const el = {
     list: $('#music-list'),
@@ -58,6 +64,7 @@ export function createMusic(ctx) {
     title: $$('[data-np="title"]'),
     sub: $$('[data-np="sub"]'),
     art: $$('[data-np="art"]'),
+    bg: $$('[data-np="bg"]'),
     toggle: $$('[data-media="toggle"]'),
     volume: $('#volume'),
   };
@@ -237,20 +244,31 @@ export function createMusic(ctx) {
 
   function render() {
     const name = current?.name || 'Nothing playing';
-    const sub = current ? (current.sub || '') : 'Choose a station or music';
+    const sub = current ? (current.sub || (current.kind === 'radio' ? 'Internet radio' : 'Local music')) : 'Tap to choose music';
     el.title.forEach((n) => { n.textContent = name; });
     el.sub.forEach((n) => { n.textContent = sub; });
-    el.art.forEach((n) => {
-      n.innerHTML = current?.art ? `<img src="${escapeHtml(current.art)}" alt="" onerror="this.remove()">` : (current?.kind === 'file' ? '🎵' : '📻');
-    });
-    const playing = current && !audio.paused;
-    el.toggle.forEach((b) => {
-      b.innerHTML = playing ? '❚❚' : '▶';
-      b.setAttribute('aria-label', playing ? 'Pause' : 'Play');
-    });
+    const artKey = current?.art || current?.kind || '';
+    if (artKey !== lastArt) {
+      lastArt = artKey;
+      el.art.forEach((n) => {
+        n.innerHTML = current?.art ? `<img src="${escapeHtml(current.art)}" alt="" decoding="async" onerror="this.remove()">` : (current?.kind === 'file' ? '🎵' : '📻');
+      });
+      el.bg.forEach((n) => {
+        n.style.backgroundImage = current?.art ? `url("${current.art.replace(/"/g, '%22')}")` : '';
+        n.classList.toggle('on', !!current?.art);
+      });
+    }
+    const playing = !!current && !audio.paused;
+    if (playing !== lastPlaying) {
+      lastPlaying = playing;
+      el.toggle.forEach((b) => {
+        b.innerHTML = playing ? ICON_PAUSE : ICON_PLAY;
+        b.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+      });
+    }
     document.body.classList.toggle('is-playing', !!playing);
     updateMediaSession();
-    renderList();
+    if (ctx.isViewVisible('music')) renderList(); else listDirty = true;
     ctx.emitState();
   }
 
@@ -278,8 +296,8 @@ export function createMusic(ctx) {
 
   document.addEventListener('click', (e) => {
     const b = e.target.closest('[data-media]');
-    if (!b) return;
-    ({ toggle, next, prev }[b.dataset.media])?.();
+    if (b) { ({ toggle, next, prev }[b.dataset.media])?.(); return; }
+    if (e.target.closest('#media-card')) ctx.showView('music');
   });
 
   el.volume.value = Math.round(audio.volume * 100);
@@ -290,7 +308,11 @@ export function createMusic(ctx) {
 
   return {
     toggle, pause, resume, next, prev, setVolume, playSearch,
-    onShow() { if (tab === 'browse' && !browseRows.length) loadBrowse(); },
+    onShow() {
+      if (tab === 'browse' && !browseRows.length) loadBrowse();
+      else if (listDirty) { listDirty = false; renderList(); }
+    },
+    openTab(name) { tab = name; renderTabs(); if (name === 'browse' && !browseRows.length) loadBrowse(); else renderList(); },
     getState: () => ({
       title: current?.name || '',
       sub: current?.sub || '',

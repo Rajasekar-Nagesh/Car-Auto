@@ -1,10 +1,11 @@
-// Car display entry point: wires the views, settings and the phone link.
+// Car display entry point: taskbar + split-screen dashboard + full-screen apps.
+// The map is created once and never torn down; apps open as overlays on top.
 
 import {
   $, $$, store, toast, speak, fmtSpeed, genPairCode, keepAwake,
-  registerServiceWorker, searchPlaces, escapeHtml, debounce,
+  registerServiceWorker, searchPlaces, escapeHtml, debounce, fmtClock,
 } from '../common.js';
-import { CarHost, transportFromUrl } from '../link.js';
+import { CarHost, transportFromUrl, loadScript } from '../link.js';
 import { createNav } from './nav.js';
 import { createMusic } from './music.js';
 import { createPhone } from './phone.js';
@@ -16,7 +17,7 @@ const DEFAULTS = {
   units: 'km',
   voiceGuidance: true,
   gpsSource: 'auto', // auto | device | phone
-  theme: 'auto', // auto | day | night
+  theme: 'auto', // map colors: auto | day | night
   keepAwake: true,
   demo: false,
   home: null,
@@ -27,19 +28,26 @@ const DEFAULTS = {
 const settings = { ...DEFAULTS, ...store.get('settings', {}) };
 const saveSettings = () => store.set('settings', settings);
 
-// Tiny event bus shared by modules.
 const bus = {
   t: new EventTarget(),
   emit(type, detail) { this.t.dispatchEvent(new CustomEvent(type, { detail })); },
   on(type, fn) { this.t.addEventListener(type, (e) => fn(e.detail)); },
 };
 
+// Views: 'home' (split screen) and 'map' (full map) show the dashboard;
+// everything else is a full-screen app over it.
+const DASH_VIEWS = new Set(['home', 'map']);
 let currentView = 'home';
+let music;
+let nav;
+
 const ctx = {
   settings,
   bus,
   showView,
+  showMap: () => { if (!DASH_VIEWS.has(currentView)) showView('home'); },
   isViewVisible: (v) => currentView === v,
+  mapVisible: () => DASH_VIEWS.has(currentView),
   speedText: (ms) => fmtSpeed(ms, settings.units),
   voice(text) {
     if (!settings.voiceGuidance || !text) return;
@@ -51,20 +59,37 @@ const ctx = {
   emitState: debounce(() => broadcastState(), 150),
 };
 
-// ---- Views ----
-
-function showView(name) {
+function showView(name, { fromHistory = false } = {}) {
+  if (name === currentView) return;
+  const wasApp = !DASH_VIEWS.has(currentView);
   currentView = name;
-  $$('.view').forEach((v) => { v.hidden = v.id !== `view-${name}`; });
-  $$('.rail [data-view]').forEach((b) => b.classList.toggle('active', b.dataset.view === name));
-  if (name === 'map') nav?.refresh();
+  const isDash = DASH_VIEWS.has(name);
+  $$('.app-view').forEach((v) => { v.hidden = v.id !== `view-${name}`; });
+  document.body.classList.toggle('map-full', name === 'map');
+  $$('.taskbar [data-view]').forEach((b) => b.classList.toggle('active', b.dataset.view === name));
+  if (isDash) nav?.refresh();
   if (name === 'music') music?.onShow();
   if (name === 'settings') renderPairing();
+  if (name === 'messages') renderMessages();
+  // Android back button / gesture closes apps and returns to the dashboard.
+  if (!fromHistory) {
+    if (!isDash && !wasApp) history.pushState({ app: name }, '');
+    else if (!isDash && wasApp) history.replaceState({ app: name }, '');
+    else if (isDash && wasApp) history.back();
+  }
 }
+window.addEventListener('popstate', () => {
+  if (!DASH_VIEWS.has(currentView)) showView('home', { fromHistory: true });
+});
 
-$$('.rail [data-view]').forEach((b) => b.addEventListener('click', () => showView(b.dataset.view)));
+$$('.taskbar [data-view]').forEach((b) => b.addEventListener('click', () => {
+  const v = b.dataset.view;
+  // Tapping Maps again while it is full screen returns to split screen.
+  showView(v === 'map' && currentView === 'map' ? 'home' : v);
+}));
+$('#btn-expand').addEventListener('click', () => showView(currentView === 'map' ? 'home' : 'map'));
 
-// ---- Theme ----
+// ---- Map colors (UI stays dark like a car head unit; map follows daylight) ----
 
 function applyTheme() {
   let night = settings.theme === 'night';
@@ -72,17 +97,14 @@ function applyTheme() {
     const h = new Date().getHours() + new Date().getMinutes() / 60;
     night = h >= 18.75 || h < 6.5;
   }
-  document.body.classList.toggle('night', night);
-  document.body.classList.toggle('day', !night);
-  document.querySelector('meta[name=theme-color]')?.setAttribute('content', night ? '#0b0f14' : '#eef2f6');
+  document.body.classList.toggle('night-map', night);
+  document.body.classList.toggle('day-map', !night);
 }
 applyTheme();
-setInterval(applyTheme, 60000);
+setInterval(applyTheme, 5 * 60000);
 
 // ---- Modules ----
 
-let music;
-let nav;
 const home = createHome(ctx);
 const phone = createPhone(ctx);
 ctx.phone = phone;
@@ -92,8 +114,80 @@ nav = createNav(ctx);
 ctx.nav = nav;
 const voice = createVoice(ctx);
 ctx.voiceCmd = voice;
+bus.on('recents', () => home.refreshSuggestions());
 
 $('#btn-voice').addEventListener('click', () => voice.listen());
+const setSpeedUnit = () => { $('#speed-unit').textContent = settings.units === 'mi' ? 'mph' : 'km/h'; };
+setSpeedUnit();
+
+// ---- Launcher ----
+
+$('#view-apps').addEventListener('click', (e) => {
+  const open = e.target.closest('[data-open]')?.dataset.open;
+  if (!open) return;
+  if (open === 'voice') { showView('home'); voice.listen(); return; }
+  if (open === 'fullscreen') { toggleFullscreen(); return; }
+  if (open === 'radio') { showView('music'); music.openTab('browse'); return; }
+  showView(open);
+});
+
+// ---- Phone app tabs ----
+
+$$('#phone-tabs [data-ptab]').forEach((b) => b.addEventListener('click', () => {
+  $$('#phone-tabs [data-ptab]').forEach((x) => x.classList.toggle('active', x === b));
+  $('.phone-body').dataset.ptabShow = b.dataset.ptab;
+}));
+
+// ---- Notifications (messages sent from the phone) ----
+
+let messages = store.get('messages', []);
+let unread = 0;
+function updateBadge() {
+  const badge = $('#msg-badge');
+  badge.hidden = !unread;
+  badge.textContent = unread;
+}
+
+function renderMessages() {
+  unread = 0;
+  updateBadge();
+  $('#message-list').innerHTML = messages.length
+    ? messages.map((m, i) => `
+      <div class="msg">
+        <span class="avatar">${escapeHtml((m.from || '?').charAt(0).toUpperCase())}</span>
+        <div class="meta"><b>${escapeHtml(m.from)}</b> <span class="muted small">${fmtClock(new Date(m.at))}</span><p>${escapeHtml(m.text)}</p></div>
+        <button class="btn small" data-read="${i}">Read</button>
+      </div>`).join('')
+    : '<div class="empty muted">No notifications</div>';
+}
+$('#message-list').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-read]');
+  if (b) { const m = messages[+b.dataset.read]; speak(`${m.from} says: ${m.text}`); }
+});
+$('#btn-clear-msgs').addEventListener('click', () => { messages = []; store.set('messages', messages); renderMessages(); });
+
+let huTimer;
+let huMsg = null;
+function showMessage(from, text) {
+  const m = { from, text, at: Date.now() };
+  messages.unshift(m);
+  messages = messages.slice(0, 30);
+  store.set('messages', messages);
+  if (currentView === 'messages') renderMessages(); else { unread++; updateBadge(); }
+  huMsg = m;
+  const box = $('#message-overlay');
+  box.querySelector('.from').textContent = from;
+  box.querySelector('.body').textContent = text;
+  box.hidden = false;
+  speak(`Message from ${from}. ${text}`);
+  clearTimeout(huTimer);
+  huTimer = setTimeout(() => { box.hidden = true; }, 12000);
+}
+$('#message-overlay').addEventListener('click', (e) => {
+  const act = e.target.closest('[data-hu]')?.dataset.hu;
+  if (act === 'read' && huMsg) speak(`${huMsg.from} says: ${huMsg.text}`);
+  else e.currentTarget.hidden = true;
+});
 
 // ---- Phone link ----
 
@@ -120,10 +214,7 @@ function startLink() {
     $('#pair-status').className = state === 'online' ? 'good' : state === 'error' ? 'bad' : 'muted';
     bus.emit('link', { count: host.clientCount, state });
   });
-  host.on('clients', ({ count }) => {
-    bus.emit('link', { count, state: linkState });
-    document.body.classList.toggle('phone-linked', count > 0);
-  });
+  host.on('clients', ({ count }) => bus.emit('link', { count, state: linkState }));
   host.on('join', ({ send }) => {
     send({ t: 'welcome', carName: settings.carName, home: settings.home, work: settings.work });
     send(stateMsg());
@@ -133,7 +224,9 @@ function startLink() {
 }
 
 function stateMsg() {
-  return { t: 'state', music: music.getState(), nav: nav.getState(), gpsSource: settings.gpsSource };
+  const n = nav.getState();
+  delete n.upcoming;
+  return { t: 'state', music: music.getState(), nav: n, gpsSource: settings.gpsSource };
 }
 
 function broadcastState() {
@@ -144,11 +237,11 @@ bus.on('nav', debounce(broadcastState, 500));
 function handlePhoneMessage(msg, reply) {
   switch (msg.t) {
     case 'hello':
-      toast(`📱 ${msg.name || 'Phone'} connected`);
+      toast(`${msg.name || 'Phone'} connected`);
       break;
     case 'nav':
       if (Number.isFinite(msg.lat) && Number.isFinite(msg.lon)) {
-        toast(`📍 Destination from phone: ${msg.name || msg.label || ''}`);
+        toast(`Destination from phone: ${msg.name || msg.label || ''}`);
         nav.navigateTo({ lat: msg.lat, lon: msg.lon, name: msg.name, label: msg.label }, { immediate: !!msg.start });
       } else if (msg.query) {
         nav.searchAndGo(msg.query);
@@ -164,7 +257,7 @@ function handlePhoneMessage(msg, reply) {
       break;
     }
     case 'say':
-      showMessage(msg.from || 'Phone', msg.text);
+      showMessage(msg.from || 'Phone', String(msg.text || '').slice(0, 500));
       break;
     case 'gps':
       nav.ingest({ ...msg, time: Date.now() }, 'phone');
@@ -180,27 +273,21 @@ function handlePhoneMessage(msg, reply) {
   }
 }
 
-function showMessage(from, text) {
-  const box = $('#message-overlay');
-  box.querySelector('.from').textContent = from;
-  box.querySelector('.body').textContent = text;
-  box.hidden = false;
-  speak(`Message from ${from}. ${text}`);
-  clearTimeout(showMessage.t);
-  showMessage.t = setTimeout(() => { box.hidden = true; }, 15000);
-}
-$('#message-overlay').addEventListener('click', (e) => { e.currentTarget.hidden = true; });
+// ---- Settings ----
 
-// ---- Settings view ----
-
-function renderPairing() {
+async function renderPairing() {
   $('#pair-code').textContent = code;
   const url = phoneUrl();
   $('#pair-url').textContent = url;
-  const qr = window.qrcode(0, 'M');
-  qr.addData(url);
-  qr.make();
-  $('#pair-qr').innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
+  try {
+    await loadScript(new URL('../../vendor/qrcode/qrcode.js', import.meta.url).href, () => window.qrcode);
+    const qr = window.qrcode(0, 'M');
+    qr.addData(url);
+    qr.make();
+    $('#pair-qr').innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
+  } catch {
+    $('#pair-qr').textContent = 'QR unavailable — use the code';
+  }
 }
 
 function bindSetting(id, key, { parse = (v) => v, after } = {}) {
@@ -215,7 +302,7 @@ function bindSetting(id, key, { parse = (v) => v, after } = {}) {
 }
 
 bindSetting('#set-carname', 'carName');
-bindSetting('#set-units', 'units', { after: () => { home.refreshUnits(); broadcastState(); } });
+bindSetting('#set-units', 'units', { after: () => { home.refreshUnits(); setSpeedUnit(); broadcastState(); } });
 bindSetting('#set-voice', 'voiceGuidance');
 bindSetting('#set-gps', 'gpsSource', { after: broadcastState });
 bindSetting('#set-theme', 'theme', { after: applyTheme });
@@ -235,6 +322,7 @@ function renderPlaces() {
     const p = settings[key];
     $(`#place-${key} .place-val`).textContent = p ? p.label : 'Not set';
   }
+  home.refreshSuggestions();
 }
 
 $$('.place').forEach((row) => {
@@ -270,7 +358,6 @@ $$('.place').forEach((row) => {
 });
 renderPlaces();
 
-// Advanced: self-hosted PeerJS signalling server.
 const srvInput = $('#set-server');
 srvInput.value = settings.peerServer ? `${settings.peerServer.secure === false ? 'http' : 'https'}://${settings.peerServer.host}:${settings.peerServer.port}${settings.peerServer.path || '/'}` : '';
 srvInput.addEventListener('change', () => {
@@ -295,12 +382,11 @@ $('#btn-reset').addEventListener('click', () => {
   location.reload();
 });
 
-$('#btn-fullscreen').addEventListener('click', () => {
+function toggleFullscreen() {
   if (document.fullscreenElement) document.exitFullscreen();
   else document.documentElement.requestFullscreen?.().catch(() => toast('Fullscreen not available'));
-});
-
-// ---- Install prompt (Android Chrome) ----
+}
+$('#btn-fullscreen').addEventListener('click', toggleFullscreen);
 
 let installEvt = null;
 window.addEventListener('beforeinstallprompt', (e) => {
@@ -319,10 +405,13 @@ $('#btn-install').addEventListener('click', async () => {
 // ---- Start ----
 
 if (settings.keepAwake) keepAwake(true);
-startLink();
 store.set('role', 'car');
-registerServiceWorker();
-showView(new URLSearchParams(location.hash.slice(1)).get('view') || 'home');
+// Connection and offline cache start after first paint so the dashboard appears instantly.
+requestAnimationFrame(() => setTimeout(() => {
+  startLink();
+  registerServiceWorker();
+}, 0));
+const startView = new URLSearchParams(location.hash.slice(1)).get('view');
+if (startView) showView(startView);
 
-// Exposed for debugging and automated tests.
-window.carauto = { ctx, settings, get host() { return host; }, code: () => code, escapeHtml };
+window.carauto = { ctx, settings, get host() { return host; }, code: () => code };

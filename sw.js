@@ -1,8 +1,8 @@
-// Offline support: the app shell is cached so the dashboard opens even
-// without signal. Map tiles are cached as you drive (up to a limit) so
+// Speed + offline support: the app shell is served from cache so the
+// dashboard opens instantly, even without signal. Map tiles are cached as you drive (up to a limit) so
 // recently seen areas still show when coverage drops.
 
-const VERSION = 'v1';
+const VERSION = 'v2';
 const SHELL = `carauto-shell-${VERSION}`;
 const TILES = 'carauto-tiles';
 const MAX_TILES = 1500;
@@ -57,16 +57,22 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // App files: network first (so updates arrive), cache when offline.
+  // App files: served instantly from cache, refreshed in the background
+  // (stale-while-revalidate). The next launch picks up any update.
   if (url.origin === self.location.origin) {
     e.respondWith(
-      fetch(req).then((res) => {
-        if (res.ok) {
-          const copy = res.clone();
-          caches.open(SHELL).then((c) => c.put(req, copy));
+      caches.open(SHELL).then(async (cache) => {
+        const cached = await cache.match(req, { ignoreSearch: true });
+        const network = fetch(req).then((res) => {
+          if (res.ok) cache.put(req, res.clone());
+          return res;
+        });
+        if (cached) {
+          e.waitUntil(network.catch(() => {}));
+          return cached;
         }
-        return res;
-      }).catch(() => caches.match(req, { ignoreSearch: true }).then((r) => r || caches.match('index.html'))),
+        return network.catch(() => cache.match('index.html'));
+      }),
     );
   }
   // Everything else (search, routing, radio streams) goes straight to the network.

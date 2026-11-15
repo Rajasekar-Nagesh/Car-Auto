@@ -3,164 +3,207 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-  <meta name="theme-color" content="#0b0f14">
+  <meta name="theme-color" content="#000000">
   <meta name="mobile-web-app-capable" content="yes">
   <title>Car-Auto Dash</title>
   <link rel="manifest" href="manifest-car.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preconnect" href="https://tile.openstreetmap.org" crossorigin>
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="css/app.css">
+  <link rel="modulepreload" href="js/common.js">
+  <link rel="modulepreload" href="js/link.js">
+  <link rel="modulepreload" href="js/car/app.js">
+  <link rel="modulepreload" href="js/car/nav.js">
+  <link rel="modulepreload" href="js/car/music.js">
+  <link rel="modulepreload" href="js/car/home.js">
+  <link rel="modulepreload" href="js/car/phone.js">
+  <link rel="modulepreload" href="js/car/voice.js">
 </head>
-<body class="car night">
-  <nav class="rail" aria-label="Main">
-    <button data-view="home" class="active" aria-label="Home">
-      <svg viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span>Home</span>
-    </button>
-    <button data-view="map" aria-label="Map">
-      <svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg><span>Maps</span>
-    </button>
-    <button data-view="music" aria-label="Music">
-      <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0zm12-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0z" fill="none" stroke="currentColor" stroke-width="2"/></svg><span>Music</span>
-    </button>
-    <button data-view="phone" aria-label="Phone">
-      <svg viewBox="0 0 24 24"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z"/></svg><span>Phone</span>
-    </button>
-    <button id="btn-voice" class="voice" aria-label="Voice command">
-      <svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11z"/></svg><span>Voice</span>
-    </button>
-    <button data-view="settings" aria-label="Settings">
-      <svg viewBox="0 0 24 24"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3h-4l-.4 2.9a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1L11 21h4l.4-2.9a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg><span>Settings</span>
-    </button>
-    <div class="rail-clock" id="rail-clock">--:--</div>
+<body class="car">
+  <!-- Taskbar -->
+  <nav class="taskbar rail" aria-label="Taskbar">
+    <div class="tb-clock" id="rail-clock">--:--</div>
+    <div class="tb-apps">
+      <button data-view="home" class="tb-btn active" aria-label="Dashboard">
+        <svg viewBox="0 0 24 24"><path d="M3 3h8v10H3zm10 0h8v6h-8zm0 8h8v10h-8zM3 15h8v6H3z"/></svg>
+      </button>
+      <button data-view="map" class="tb-btn app-maps" aria-label="Maps">
+        <svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>
+      </button>
+      <button data-view="music" class="tb-btn app-music" aria-label="Music">
+        <svg viewBox="0 0 24 24"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3z"/></svg>
+      </button>
+      <button data-view="phone" class="tb-btn app-phone" aria-label="Phone">
+        <svg viewBox="0 0 24 24"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z"/></svg>
+      </button>
+    </div>
+    <div class="tb-sys">
+      <button data-view="messages" class="tb-btn tb-small" aria-label="Notifications">
+        <svg viewBox="0 0 24 24"><path d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2zm6-6V11c0-3.07-1.64-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1z"/></svg>
+        <span class="badge" id="msg-badge" hidden></span>
+      </button>
+      <button data-view="apps" class="tb-btn tb-small" aria-label="All apps">
+        <svg viewBox="0 0 24 24"><path d="M4 4h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 10h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 16h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4z"/></svg>
+      </button>
+      <button id="btn-voice" class="tb-btn tb-mic" aria-label="Voice command">
+        <svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11z"/></svg>
+      </button>
+    </div>
   </nav>
 
-  <main>
-    <!-- HOME -->
-    <section class="view" id="view-home">
-      <div class="dash">
-        <div class="tile tile-clock">
-          <div class="clock" id="home-clock">--:--</div>
-          <div class="muted" id="home-date"></div>
-          <div class="weather" id="home-weather"><span class="muted">Weather appears once location is found</span></div>
+  <main id="main">
+    <!-- Split-screen dashboard: live map + cards. The map never unloads. -->
+    <div class="dash" id="dash">
+      <section class="map-pane" id="view-map">
+        <div id="map"></div>
+        <div class="map-top">
+          <div id="maneuver" class="maneuver" hidden>
+            <div class="arrow"></div>
+            <div class="m-body">
+              <div class="dist"></div>
+              <div class="text"></div>
+            </div>
+            <div class="then" hidden></div>
+          </div>
+          <form id="nav-search" class="search-pill" autocomplete="off">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 14h-.8l-.3-.3A6.5 6.5 0 1 0 14 15.5l.3.3v.8l5 5 1.5-1.5zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z"/></svg>
+            <input type="search" placeholder="Search here" enterkeyhint="search" aria-label="Search destination">
+          </form>
+          <div id="nav-results" class="results" hidden></div>
         </div>
-        <div class="tile tile-speed">
-          <div class="speed"><span id="home-speed">0</span><small id="home-speed-unit">km/h</small></div>
+        <div id="route-preview" class="route-preview" hidden></div>
+        <div class="map-speed" id="map-speed"><b>0</b><small id="speed-unit">km/h</small></div>
+        <button id="btn-recenter" class="fab recenter" hidden aria-label="Re-center">
+          <svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm9 3h-2.07A7 7 0 0 0 13 5.07V3h-2v2.07A7 7 0 0 0 5.07 11H3v2h2.07A7 7 0 0 0 11 18.93V21h2v-2.07A7 7 0 0 0 18.93 13H21z"/></svg>
+        </button>
+        <button id="btn-expand" class="fab expand" aria-label="Full screen map">
+          <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7zm-2-4h2V7h3V5H5zm12 7h-3v2h5v-5h-2zM14 5v2h3v3h2V5z"/></svg>
+        </button>
+        <div id="tripbar" class="tripbar" hidden>
+          <button id="btn-stop-nav" class="close-btn" aria-label="End navigation">✕</button>
+          <div class="trip-main"><b id="trip-time">–</b><span><span id="trip-remain">–</span> · <span id="trip-eta">--:--</span></span></div>
         </div>
-        <div class="tile tile-nav" id="tile-nav"></div>
-        <div class="tile tile-np">
-          <div class="tile-label">Now playing</div>
-          <div class="np-row">
+      </section>
+
+      <aside class="side-cards">
+        <div class="card media-card" id="media-card">
+          <div class="media-bg" data-np="bg"></div>
+          <div class="media-head">
             <div class="art" data-np="art">📻</div>
-            <div class="meta"><b data-np="title">Nothing playing</b><span class="muted" data-np="sub"></span></div>
+            <div class="meta"><b data-np="title">Nothing playing</b><span data-np="sub">Tap to choose music</span></div>
           </div>
           <div class="controls">
-            <button class="ctl" data-media="prev" aria-label="Previous">⏮</button>
-            <button class="ctl main" data-media="toggle" aria-label="Play">▶</button>
-            <button class="ctl" data-media="next" aria-label="Next">⏭</button>
+            <button class="ctl" data-media="prev" aria-label="Previous"><svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg></button>
+            <button class="ctl main" data-media="toggle" aria-label="Play"></button>
+            <button class="ctl" data-media="next" aria-label="Next"><svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6zM16 6v12h2V6z"/></svg></button>
           </div>
         </div>
-        <div class="tile tile-quick">
-          <div class="tile-label">Quick dial</div>
+        <div class="card ctx-card" id="ctx-card">
+          <div class="ctx-top">
+            <div id="home-weather" class="weather"></div>
+            <div id="home-date" class="muted"></div>
+          </div>
+          <div id="tile-nav" class="ctx-nav"></div>
           <div class="quick-row" id="quick-contacts"></div>
+          <div id="tile-link" class="ctx-link"></div>
         </div>
-        <div class="tile tile-link" id="tile-link"></div>
+      </aside>
+    </div>
+
+    <!-- Full-screen apps -->
+    <section class="app-view" id="view-apps" hidden>
+      <div class="launcher">
+        <button class="launch" data-open="map"><span class="ic ic-maps"><svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg></span>Maps</button>
+        <button class="launch" data-open="music"><span class="ic ic-music"><svg viewBox="0 0 24 24"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3z"/></svg></span>Music</button>
+        <button class="launch" data-open="radio"><span class="ic ic-radio"><svg viewBox="0 0 24 24"><path d="M3.24 6.15A2 2 0 0 0 2 8v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2H8.3l8.26-3.34L15.88 1zM7 20a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm13-8h-2v-2h-2v2H4V8h16z"/></svg></span>Radio</button>
+        <button class="launch" data-open="phone"><span class="ic ic-phone"><svg viewBox="0 0 24 24"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z"/></svg></span>Phone</button>
+        <button class="launch" data-open="messages"><span class="ic ic-msg"><svg viewBox="0 0 24 24"><path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zM6 9h12v2H6zm8 5H6v-2h8zm4-6H6V6h12z"/></svg></span>Messages</button>
+        <button class="launch" data-open="voice"><span class="ic ic-voice"><svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11z"/></svg></span>Voice</button>
+        <button class="launch" data-open="settings"><span class="ic ic-settings"><svg viewBox="0 0 24 24"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3h-4l-.4 2.9a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L4.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1L9 21h4l.4-2.9a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5zM11 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(1 0)"/></svg></span>Settings</button>
+        <button class="launch" data-open="fullscreen"><span class="ic ic-full"><svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7zm-2-4h2V7h3V5H5zm12 7h-3v2h5v-5h-2zM14 5v2h3v3h2V5z"/></svg></span>Full screen</button>
       </div>
     </section>
 
-    <!-- MAP -->
-    <section class="view view-map" id="view-map" hidden>
-      <div id="map"></div>
-      <div class="map-top">
-        <form id="nav-search" class="search" autocomplete="off">
-          <input type="search" placeholder="Search a place or address" enterkeyhint="search" aria-label="Search destination">
-          <button class="btn primary" type="submit">Go</button>
-        </form>
-        <div id="nav-results" class="results" hidden></div>
-        <div id="maneuver" class="maneuver" hidden>
-          <div class="arrow"></div>
-          <div class="m-body">
-            <div class="dist"></div>
-            <div class="text"></div>
-          </div>
-          <div class="then" hidden></div>
-        </div>
-      </div>
-      <div id="route-preview" class="route-preview card" hidden></div>
-      <div class="map-speed" id="map-speed"><b>0</b></div>
-      <button id="btn-recenter" class="fab" hidden aria-label="Re-center">◎</button>
-      <div id="tripbar" class="tripbar" hidden>
-        <div><b id="trip-eta">--:--</b><span class="muted">arrival</span></div>
-        <div><b id="trip-time">–</b><span class="muted">time</span></div>
-        <div><b id="trip-remain">–</b><span class="muted">distance</span></div>
-        <button id="btn-stop-nav" class="btn danger">End</button>
-      </div>
-    </section>
-
-    <!-- MUSIC -->
-    <section class="view view-music" id="view-music" hidden>
-      <div class="music-side card">
-        <div class="art big-art" data-np="art">📻</div>
-        <b class="np-title" data-np="title">Nothing playing</b>
-        <span class="muted" data-np="sub"></span>
-        <div class="controls">
-          <button class="ctl" data-media="prev" aria-label="Previous">⏮</button>
-          <button class="ctl main" data-media="toggle" aria-label="Play">▶</button>
-          <button class="ctl" data-media="next" aria-label="Next">⏭</button>
-        </div>
-        <label class="vol">🔈<input id="volume" type="range" min="0" max="100" aria-label="Volume">🔊</label>
-      </div>
-      <div class="music-main">
+    <section class="app-view view-music" id="view-music" hidden>
+      <div class="app-bar">
         <div class="tabs" id="music-tabs">
-          <button data-tab="favorites">★ Favorites</button>
-          <button data-tab="browse">📻 Radio</button>
-          <button data-tab="files">🎵 My files</button>
+          <button data-tab="favorites">Favorites</button>
+          <button data-tab="browse">Radio</button>
+          <button data-tab="files">My files</button>
         </div>
-        <form id="radio-search" class="search" autocomplete="off" hidden>
-          <input type="search" placeholder="Search stations, genres, cities…" enterkeyhint="search" aria-label="Search radio">
-          <button class="btn primary" type="submit">Search</button>
-        </form>
-        <div id="music-list" class="list"></div>
-        <input type="file" id="file-input" accept="audio/*" multiple hidden>
+      </div>
+      <div class="music-body">
+        <div class="music-side">
+          <div class="art big-art" data-np="art">📻</div>
+          <b class="np-title" data-np="title">Nothing playing</b>
+          <span class="muted" data-np="sub"></span>
+          <div class="controls">
+            <button class="ctl" data-media="prev" aria-label="Previous"><svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg></button>
+            <button class="ctl main" data-media="toggle" aria-label="Play"></button>
+            <button class="ctl" data-media="next" aria-label="Next"><svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6zM16 6v12h2V6z"/></svg></button>
+          </div>
+          <label class="vol"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9z"/></svg><input id="volume" type="range" min="0" max="100" aria-label="Volume"></label>
+        </div>
+        <div class="music-main">
+          <form id="radio-search" class="search-pill flat" autocomplete="off" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 14h-.8l-.3-.3A6.5 6.5 0 1 0 14 15.5l.3.3v.8l5 5 1.5-1.5zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z"/></svg>
+            <input type="search" placeholder="Search stations, genres, cities" enterkeyhint="search" aria-label="Search radio">
+          </form>
+          <div id="music-list" class="list"></div>
+          <input type="file" id="file-input" accept="audio/*" multiple hidden>
+        </div>
       </div>
     </section>
 
-    <!-- PHONE -->
-    <section class="view view-phone" id="view-phone" hidden>
-      <div class="card dialer">
-        <div id="dial-display" class="dial-display">Enter number</div>
-        <div id="dial-pad" class="dial-pad">
-          <button data-key="1">1</button><button data-key="2">2</button><button data-key="3">3</button>
-          <button data-key="4">4</button><button data-key="5">5</button><button data-key="6">6</button>
-          <button data-key="7">7</button><button data-key="8">8</button><button data-key="9">9</button>
-          <button data-key="*">*</button><button data-key="0">0</button><button data-key="#">#</button>
-          <button data-key="+">+</button>
-          <button data-key="call" class="call" aria-label="Call">📞</button>
-          <button data-key="back" aria-label="Delete">⌫</button>
+    <section class="app-view view-phone" id="view-phone" hidden>
+      <div class="app-bar">
+        <div class="tabs" id="phone-tabs">
+          <button data-ptab="contacts" class="active">Favorites</button>
+          <button data-ptab="keypad">Keypad</button>
         </div>
       </div>
-      <div class="card contacts">
-        <h2>Favorite contacts</h2>
-        <div id="contact-list" class="list"></div>
-        <form id="contact-form" class="row add-contact" autocomplete="off">
-          <input name="name" placeholder="Name" required aria-label="Contact name">
-          <input name="number" type="tel" placeholder="Number" required aria-label="Phone number">
-          <button class="btn primary" type="submit">Add</button>
-        </form>
-        <p class="muted small">Calls go through the stereo's Bluetooth hands-free. Pair your phone with the stereo over Bluetooth first.</p>
+      <div class="phone-body" data-ptab-show="contacts">
+        <div class="contacts">
+          <div id="contact-list" class="list"></div>
+          <form id="contact-form" class="add-contact" autocomplete="off">
+            <input name="name" placeholder="Name" required aria-label="Contact name">
+            <input name="number" type="tel" placeholder="Number" required aria-label="Phone number">
+            <button class="btn primary" type="submit">Add</button>
+          </form>
+          <p class="muted small">Calls use the stereo's Bluetooth hands-free. Pair your phone with the stereo over Bluetooth first.</p>
+        </div>
+        <div class="dialer">
+          <div id="dial-display" class="dial-display">Enter number</div>
+          <div id="dial-pad" class="dial-pad">
+            <button data-key="1">1</button><button data-key="2">2<small>ABC</small></button><button data-key="3">3<small>DEF</small></button>
+            <button data-key="4">4<small>GHI</small></button><button data-key="5">5<small>JKL</small></button><button data-key="6">6<small>MNO</small></button>
+            <button data-key="7">7<small>PQRS</small></button><button data-key="8">8<small>TUV</small></button><button data-key="9">9<small>WXYZ</small></button>
+            <button data-key="*">*</button><button data-key="0">0<small>+</small></button><button data-key="#">#</button>
+            <button data-key="+">+</button>
+            <button data-key="call" class="call" aria-label="Call"><svg viewBox="0 0 24 24"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z"/></svg></button>
+            <button data-key="back" aria-label="Delete">⌫</button>
+          </div>
+        </div>
       </div>
     </section>
 
-    <!-- SETTINGS -->
-    <section class="view view-settings" id="view-settings" hidden>
+    <section class="app-view view-messages" id="view-messages" hidden>
+      <div class="app-bar"><h2>Notifications</h2><button class="btn" id="btn-clear-msgs">Clear all</button></div>
+      <div id="message-list" class="list"></div>
+    </section>
+
+    <section class="app-view view-settings" id="view-settings" hidden>
+      <div class="app-bar"><h2>Settings</h2></div>
       <div class="settings-grid">
         <div class="card pair-card">
-          <h2>Pair your phone</h2>
+          <h3>Pair your phone</h3>
           <div class="pair">
             <div id="pair-qr" class="qr"></div>
             <div>
-              <p>Scan this code with your phone's camera (Android or iPhone). It opens the Car-Auto remote.</p>
-              <p class="muted">Or open the app on your phone and enter this code:</p>
+              <p>Scan with your phone camera (Android or iPhone) to open the Car-Auto remote.</p>
+              <p class="muted">Or enter this code in the remote:</p>
               <div class="pair-code" id="pair-code">----</div>
               <p id="pair-status" class="muted">Starting…</p>
               <button class="btn" id="btn-new-code">New code</button>
@@ -170,13 +213,13 @@
         </div>
 
         <div class="card">
-          <h2>General</h2>
+          <h3>General</h3>
           <label class="field">Car name<input id="set-carname" maxlength="30"></label>
           <label class="field">Units
             <select id="set-units"><option value="km">Kilometers (km/h)</option><option value="mi">Miles (mph)</option></select>
           </label>
-          <label class="field">Theme
-            <select id="set-theme"><option value="auto">Auto (night after sunset)</option><option value="night">Night</option><option value="day">Day</option></select>
+          <label class="field">Map colors
+            <select id="set-theme"><option value="auto">Auto (dark after sunset)</option><option value="night">Always dark</option><option value="day">Always light</option></select>
           </label>
           <label class="field">GPS source
             <select id="set-gps">
@@ -189,27 +232,27 @@
           <label class="switch"><input type="checkbox" id="set-awake"> Keep screen on</label>
           <label class="switch"><input type="checkbox" id="set-demo"> Demo drive (simulate driving along routes)</label>
           <div class="row">
-            <button class="btn" id="btn-fullscreen">⛶ Fullscreen</button>
+            <button class="btn" id="btn-fullscreen">Full screen</button>
             <button class="btn primary" id="btn-install" hidden>Install app</button>
           </div>
         </div>
 
         <div class="card">
-          <h2>Saved places</h2>
+          <h3>Saved places</h3>
           <div class="place" id="place-home" data-place="home">
-            <div><b>🏠 Home</b> <span class="muted place-val">Not set</span></div>
+            <div><b>Home</b> <span class="muted place-val">Not set</span></div>
             <form class="row"><input name="q" placeholder="Search address"><button class="btn" type="submit">Set</button></form>
             <div class="row"><button class="btn small" data-act="here" type="button">Use current location</button><button class="btn small" data-act="clear" type="button">Clear</button></div>
           </div>
           <div class="place" id="place-work" data-place="work">
-            <div><b>💼 Work</b> <span class="muted place-val">Not set</span></div>
+            <div><b>Work</b> <span class="muted place-val">Not set</span></div>
             <form class="row"><input name="q" placeholder="Search address"><button class="btn" type="submit">Set</button></form>
             <div class="row"><button class="btn small" data-act="here" type="button">Use current location</button><button class="btn small" data-act="clear" type="button">Clear</button></div>
           </div>
         </div>
 
         <div class="card">
-          <h2>Advanced</h2>
+          <h3>Advanced</h3>
           <label class="field">Own pairing server (optional)
             <input id="set-server" placeholder="https://your-peerjs-server:443/" inputmode="url">
           </label>
@@ -221,25 +264,22 @@
     </section>
   </main>
 
-  <div id="voice-overlay" class="overlay" hidden>
-    <div class="voice-box">
-      <div class="pulse">🎤</div>
-      <div id="voice-transcript">Listening…</div>
-      <div class="muted small">Try “Navigate to the airport”, “Play jazz radio”, “Call Mom”, “Go home”</div>
-    </div>
+  <!-- Heads-up notification (message from phone) -->
+  <div id="message-overlay" class="heads-up" hidden>
+    <div class="hu-icon">💬</div>
+    <div class="hu-body"><b class="from"></b><div class="body"></div></div>
+    <button class="btn small" data-hu="read">Read</button>
+    <button class="icon-btn" data-hu="close" aria-label="Dismiss">✕</button>
   </div>
 
-  <div id="message-overlay" class="overlay" hidden>
-    <div class="message-box">
-      <div class="muted">💬 Message from <span class="from"></span></div>
-      <div class="body"></div>
-      <div class="muted small">Tap to dismiss</div>
-    </div>
+  <!-- Voice -->
+  <div id="voice-overlay" class="voice-sheet" hidden>
+    <div class="voice-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+    <div id="voice-transcript">Listening…</div>
+    <div class="muted small">Try “Navigate to the airport”, “Play jazz radio”, “Call Mom”, “Go home”</div>
   </div>
 
   <script src="vendor/leaflet/leaflet.js"></script>
-  <script src="vendor/peerjs/peerjs.min.js"></script>
-  <script src="vendor/qrcode/qrcode.js"></script>
   <script type="module" src="js/car/app.js"></script>
 </body>
 </html>
