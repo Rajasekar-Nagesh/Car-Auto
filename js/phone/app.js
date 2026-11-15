@@ -16,6 +16,33 @@ let carState = null;
 let gpsWatch = null;
 let releaseWake = null;
 
+// Inside the Car-Auto Link Android app, window.CarAutoLink gives access to the
+// phone's media sessions, calls, contacts and call log.
+const native = window.CarAutoLink || null;
+const parseJson = (s, d) => { try { return JSON.parse(s); } catch { return d; } };
+window.carautoNative = {
+  onEvent(ev) {
+    if (!client) return;
+    if (ev.type === 'media') client.send({ t: 'phoneMedia', media: ev.media });
+    else if (ev.type === 'call') client.send({ t: 'phoneCall', ...ev });
+  },
+};
+
+function sendContacts() {
+  const items = parseJson(native.getContacts(), []);
+  const size = 150; // keep each data-channel message small
+  const pages = Math.max(1, Math.ceil(items.length / size));
+  for (let page = 0; page < pages; page++) {
+    client.send({ t: 'contacts', page, pages, items: items.slice(page * size, (page + 1) * size) });
+  }
+}
+
+function pushNativeState() {
+  client.send({ t: 'phoneMedia', media: parseJson(native.getMedia(), null) });
+  const call = parseJson(native.getCall(), null);
+  if (call && call.state !== 'idle') client.send({ t: 'phoneCall', ...call });
+}
+
 // ---- Pairing from QR (#pair=CODE&srv=...) ----
 (function readHash() {
   const h = new URLSearchParams(location.hash.slice(1));
@@ -48,8 +75,15 @@ function connect() {
   client?.stop();
   if (!pairing) return showViews();
   showViews();
-  client = new PhoneClient(pairing.code, { transport: transportFromUrl(), server: pairing.server, name });
+  client = new PhoneClient(pairing.code, {
+    transport: transportFromUrl(),
+    server: pairing.server,
+    name,
+    caps: native ? { native: true, media: true, calls: true, contacts: true } : null,
+  });
   client.on('status', ({ state, message }) => {
+    native?.onStatus(state, message || '');
+    if (state === 'connected' && native) pushNativeState();
     if (state === 'connected') setStatus(`Connected to ${carInfo.carName}`, 'good');
     else if (state === 'connecting') setStatus('Connecting to car…', 'warn');
     else setStatus(message || 'Disconnected', state === 'error' ? 'bad' : 'warn');
@@ -59,6 +93,16 @@ function connect() {
 }
 
 function onMessage(msg) {
+  if (native) {
+    switch (msg.t) {
+      case 'pmedia': native.mediaCmd(msg.cmd); return;
+      case 'pcall': native.placeCall(String(msg.number || '')); return;
+      case 'pcallAction': native.callAction(msg.action); return;
+      case 'getContacts': sendContacts(); return;
+      case 'getRecents': client.send({ t: 'recents', items: parseJson(native.getRecents(), []) }); return;
+      default: break;
+    }
+  }
   if (msg.t === 'welcome') {
     carInfo = { ...carInfo, ...msg };
     setStatus(`Connected to ${carInfo.carName}`, 'good');
@@ -262,7 +306,18 @@ $('#btn-install-help').addEventListener('click', () => $('#install-help').showMo
 
 store.set('role', 'phone');
 connect();
-if (pairing && store.get('shareGps', false)) setGps(true);
+if (native && params.get('gps') === '1') setGps(true);
+else if (pairing && store.get('shareGps', false)) setGps(true);
+
+// In a normal Android browser, point to the Android app for music & calls.
+if (!native && /Android/i.test(navigator.userAgent)) {
+  const banner = $('#app-banner');
+  banner.hidden = false;
+  if (pairing) {
+    $('#open-in-app').href = `intent://pair?code=${encodeURIComponent(pairing.code)}#Intent;scheme=carauto;package=app.carauto.link;end`;
+    $('#open-in-app').hidden = false;
+  }
+}
 if (pairing && shared) {
   history.replaceState(null, '', location.pathname);
   $('#dest-form').q.value = shared;

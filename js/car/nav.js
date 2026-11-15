@@ -3,7 +3,7 @@
 
 import {
   $, store, toast, speak, fetchJSON, haversine, bearing, fmtDist, sayDist,
-  fmtDuration, fmtClock, escapeHtml, searchPlaces,
+  fmtDuration, fmtClock, escapeHtml, searchPlaces, openExternal,
 } from '../common.js';
 
 const OSRM = 'https://router.project-osrm.org/route/v1/driving';
@@ -373,6 +373,10 @@ export function createNav(ctx) {
       <div class="row">
         <button class="btn primary big" data-act="go">Start</button>
         <button class="btn" data-act="cancel">Cancel</button>
+      </div>
+      <div class="row wrap">
+        <button class="btn small" data-act="gmaps">Open in Google Maps</button>
+        <button class="btn small" data-act="waze">Open in Waze</button>
       </div>`;
   }
 
@@ -380,6 +384,9 @@ export function createNav(ctx) {
     const act = e.target.closest('[data-act]')?.dataset.act;
     if (act === 'go' && preview) startRoute(preview);
     if (act === 'cancel') clearPreview();
+    const d = preview?.dest;
+    if (d && act === 'gmaps') openExternal(`https://www.google.com/maps/dir/?api=1&destination=${d.lat},${d.lon}&travelmode=driving&dir_action=navigate`);
+    if (d && act === 'waze') openExternal(`https://waze.com/ul?ll=${d.lat},${d.lon}&navigate=yes`);
   });
 
   function clearPreview() {

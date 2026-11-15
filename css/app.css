@@ -437,10 +437,58 @@ body.landing main { align-items: center; text-align: center; padding-top: 6vh; }
 
 /* Phone app: one tab at a time */
 .phone-body { grid-template-columns: 1fr; }
-.phone-body[data-ptab-show=contacts] .dialer, .phone-body[data-ptab-show=keypad] .contacts { display: none; }
-.phone-body .dialer { width: min(560px, 100%); justify-self: center; }
+.phone-body > * { display: none; }
+.phone-body[data-ptab-show=contacts] .contacts,
+.phone-body[data-ptab-show=recents] .synced,
+.phone-body[data-ptab-show=all] .synced { display: flex; }
+.phone-body[data-ptab-show=keypad] .dialer { display: flex; width: min(560px, 100%); justify-self: center; }
+.synced { flex-direction: column; min-height: 0; }
+.search-input { max-width: 360px; border-radius: 999px; }
+.row-call { width: 100%; border-bottom: 1px solid var(--line); }
+.row-call .meta { flex: 1; }
+.row-call.missed b { color: var(--bad); }
+.call-type { display: inline-flex; align-items: center; gap: 6px; }
+.call-type svg { width: 16px; height: 16px; fill: currentColor; }
+
+/* Progress bar (phone media / local files) */
+.np-progress { position: relative; height: 4px; border-radius: 2px; background: #ffffff26; overflow: hidden; width: 100%; }
+.np-progress i { position: absolute; inset: 0; background: var(--primary); transform-origin: left; transform: scaleX(0); transition: transform 1s linear; }
+.media-card .np-progress { margin: 8px 0 -4px; }
+
+/* Launcher: stereo apps */
+.launcher-head { padding: 8px 32px 0; color: var(--muted); font-size: 1rem; }
+.launcher-hint { padding: 0 32px 24px; }
+.ic img { width: 64px; height: 64px; border-radius: 16px; }
+.ic.ic-app { background: var(--surface); }
+.ic.ic-letter { font-size: 2rem; font-weight: 500; color: #fff; }
+.launch span.lbl { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Incoming call */
+.call-overlay { position: fixed; inset: 0; z-index: 2500; background: #000d; display: flex; align-items: center; justify-content: center; padding: 20px; animation: appIn .15s ease-out; }
+.call-card { background: var(--surface); border-radius: 36px; padding: 36px 48px; width: min(560px, 100%); display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+.call-avatar { width: 120px; height: 120px; font-size: 3rem; margin-bottom: 8px; animation: ring 1.2s infinite; }
+@keyframes ring { 0%, 100% { box-shadow: 0 0 0 0 #6dd58c66; } 60% { box-shadow: 0 0 0 24px #6dd58c00; } }
+.call-name { font-size: 2rem; font-weight: 500; }
+.call-actions { display: flex; gap: 64px; margin-top: 24px; }
+.call-btn { width: 96px; height: 96px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; }
+.call-btn svg { width: 44px; height: 44px; fill: #fff; }
+.call-btn.answer { background: #1e8e3e; }
+.call-btn.decline { background: #d93025; }
+.call-btn.small { width: 56px; height: 56px; }
+.call-btn.small svg { width: 28px; height: 28px; }
+.call-bar {
+  position: fixed; top: 16px; left: calc(var(--tb) + var(--gap) + 16px); z-index: 1500;
+  display: flex; align-items: center; gap: 14px; padding: 8px 8px 8px 22px; border-radius: 999px;
+  background: #0d652d; box-shadow: 0 8px 24px #000a; animation: appIn .2s ease-out;
+}
+.call-bar .muted { color: #d6f5df; font-variant-numeric: tabular-nums; }
+.call-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--good); animation: breathe .8s infinite alternate; }
+body.in-call .map-top { margin-top: 84px; }
+@media (max-aspect-ratio: 1/1) { .call-bar { left: var(--gap); } }
 
 /* Keep map overlays (z-index 400–600) from painting above full-screen apps */
 .dash { isolation: isolate; z-index: 0; }
 .media-card .art { width: 104px; height: 104px; border-radius: 20px; font-size: 2.8rem; }
 @media (max-height: 560px) { .media-card .art { width: 76px; height: 76px; } }
+.contact-main .meta { display: flex; flex-direction: column; min-width: 0; text-align: left; }
+.contact-main .meta b { font-weight: 500; }

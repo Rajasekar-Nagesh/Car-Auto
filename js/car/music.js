@@ -54,6 +54,11 @@ export function createMusic(ctx) {
   let lastArt = null;
   let lastPlaying = null;
   let listDirty = true;
+  // Media playing on the paired Android phone (via the Car-Auto Link app).
+  let phoneMedia = null;
+  let source = 'local'; // 'local' | 'phone'
+  let progressTimer = 0;
+  let heldForCall = false;
 
   const el = {
     list: $('#music-list'),
@@ -67,12 +72,14 @@ export function createMusic(ctx) {
     bg: $$('[data-np="bg"]'),
     toggle: $$('[data-media="toggle"]'),
     volume: $('#volume'),
+    progress: $$('[data-np="progress"]'),
   };
 
   // ---- Playback ----
 
   function play(list, i) {
     if (!list.length) return;
+    takeOverFromPhone();
     queue = list;
     index = (i + list.length) % list.length;
     current = list[index];
@@ -85,7 +92,20 @@ export function createMusic(ctx) {
     render();
   }
 
+  function takeOverFromPhone() {
+    if (source === 'phone' && phoneMedia?.playing) ctx.phoneLink?.send({ t: 'pmedia', cmd: 'pause' });
+    source = 'local';
+  }
+
+  const phoneCmd = (cmd) => ctx.phoneLink?.send({ t: 'pmedia', cmd });
+  const phoneActive = () => source === 'phone' && phoneMedia && ctx.phoneLink?.available();
+
   function toggle() {
+    if (phoneActive()) return phoneCmd(phoneMedia.playing ? 'pause' : 'play');
+    localToggle();
+  }
+
+  function localToggle() {
     if (!current) {
       const last = store.get('lastStation', null);
       if (favorites.length) return play(favorites, 0);
@@ -98,13 +118,75 @@ export function createMusic(ctx) {
     else audio.pause();
   }
 
-  const pause = () => audio.pause();
-  const resume = () => (current ? audio.play().catch(() => {}) : toggle());
-  const next = () => queue.length && play(queue, index + 1);
+  const pause = () => (phoneActive() ? phoneCmd('pause') : audio.pause());
+  const resume = () => {
+    if (phoneActive()) return phoneCmd('play');
+    return current ? audio.play().catch(() => {}) : localToggle();
+  };
+  const next = () => (phoneActive() ? phoneCmd('next') : queue.length && play(queue, index + 1));
   const prev = () => {
+    if (phoneActive()) return phoneCmd('prev');
     if (current?.kind === 'file' && audio.currentTime > 4) audio.currentTime = 0;
     else if (queue.length) play(queue, index - 1);
   };
+
+  // Called whenever the phone reports what it is playing (or null when nothing).
+  function setPhoneMedia(m) {
+    if (!m || !m.title) {
+      phoneMedia = null;
+      if (source === 'phone') source = 'local';
+      render();
+      return;
+    }
+    const prevArt = phoneMedia && phoneMedia.artKey === m.artKey ? phoneMedia.art : null;
+    const startedPlaying = m.playing && !phoneMedia?.playing;
+    phoneMedia = { ...m, art: m.art !== undefined ? m.art : prevArt, receivedAt: Date.now() };
+    if (startedPlaying) {
+      source = 'phone';
+      document.body.classList.remove('buffering');
+      if (!audio.paused) audio.pause();
+    } else if (!current && source === 'local' && audio.paused) {
+      source = 'phone';
+    }
+    render();
+  }
+
+  function display() {
+    if (source === 'phone' && phoneMedia) {
+      return {
+        kind: 'phone',
+        name: phoneMedia.title,
+        sub: [phoneMedia.artist, phoneMedia.app].filter(Boolean).join(' · '),
+        art: phoneMedia.art || '',
+        playing: !!phoneMedia.playing,
+      };
+    }
+    if (!current) return null;
+    return {
+      kind: current.kind,
+      name: current.name,
+      sub: current.sub || (current.kind === 'radio' ? 'Internet radio' : 'Local music'),
+      art: current.art || '',
+      playing: !audio.paused,
+    };
+  }
+
+  function progressNow() {
+    if (source === 'phone' && phoneMedia?.duration > 0) {
+      const elapsed = phoneMedia.playing ? (Date.now() - (phoneMedia.positionAt || phoneMedia.receivedAt)) * (phoneMedia.speed || 1) : 0;
+      return Math.min(1, Math.max(0, (phoneMedia.position + elapsed) / phoneMedia.duration));
+    }
+    if (source === 'local' && current?.kind === 'file' && audio.duration > 0) return audio.currentTime / audio.duration;
+    return null;
+  }
+
+  function updateProgress() {
+    const f = progressNow();
+    el.progress.forEach((n) => {
+      n.hidden = f == null;
+      if (f != null) n.firstElementChild.style.transform = `scaleX(${f})`;
+    });
+  }
 
   function setVolume(v) {
     audio.volume = Math.max(0, Math.min(1, v));
@@ -117,6 +199,7 @@ export function createMusic(ctx) {
   audio.addEventListener('pause', render);
   audio.addEventListener('ended', () => (current?.kind === 'file' ? next() : render()));
   audio.addEventListener('error', () => {
+    document.body.classList.remove('buffering');
     if (!audio.getAttribute('src')) return;
     audio.pause();
     if (current) toast(`${current.name} is unavailable right now`);
@@ -124,6 +207,7 @@ export function createMusic(ctx) {
   });
   audio.addEventListener('waiting', () => document.body.classList.add('buffering'));
   audio.addEventListener('playing', () => document.body.classList.remove('buffering'));
+  audio.addEventListener('pause', () => document.body.classList.remove('buffering'));
 
   // Media Session: lock-screen / notification controls and hardware media keys.
   if ('mediaSession' in navigator) {
@@ -243,22 +327,27 @@ export function createMusic(ctx) {
   }
 
   function render() {
-    const name = current?.name || 'Nothing playing';
-    const sub = current ? (current.sub || (current.kind === 'radio' ? 'Internet radio' : 'Local music')) : 'Tap to choose music';
+    const d = display();
+    const name = d?.name || 'Nothing playing';
+    const sub = d ? d.sub : 'Tap to choose music';
     el.title.forEach((n) => { n.textContent = name; });
     el.sub.forEach((n) => { n.textContent = sub; });
-    const artKey = current?.art || current?.kind || '';
+    const artKey = d?.art || d?.kind || '';
     if (artKey !== lastArt) {
       lastArt = artKey;
       el.art.forEach((n) => {
-        n.innerHTML = current?.art ? `<img src="${escapeHtml(current.art)}" alt="" decoding="async" onerror="this.remove()">` : (current?.kind === 'file' ? '🎵' : '📻');
+        n.innerHTML = d?.art ? `<img src="${escapeHtml(d.art)}" alt="" decoding="async" onerror="this.remove()">` : (d?.kind === 'phone' ? '📱' : d?.kind === 'file' ? '🎵' : '📻');
       });
       el.bg.forEach((n) => {
-        n.style.backgroundImage = current?.art ? `url("${current.art.replace(/"/g, '%22')}")` : '';
-        n.classList.toggle('on', !!current?.art);
+        n.style.backgroundImage = d?.art ? `url("${d.art.replace(/"/g, '%22')}")` : '';
+        n.classList.toggle('on', !!d?.art);
       });
     }
-    const playing = !!current && !audio.paused;
+    const playing = !!d?.playing;
+    clearInterval(progressTimer);
+    updateProgress();
+    if (playing && progressNow() != null) progressTimer = setInterval(updateProgress, 1000);
+    window.CarAutoNative?.setMediaState?.(name, sub, playing);
     if (playing !== lastPlaying) {
       lastPlaying = playing;
       el.toggle.forEach((b) => {
@@ -313,12 +402,15 @@ export function createMusic(ctx) {
       else if (listDirty) { listDirty = false; renderList(); }
     },
     openTab(name) { tab = name; renderTabs(); if (name === 'browse' && !browseRows.length) loadBrowse(); else renderList(); },
-    getState: () => ({
-      title: current?.name || '',
-      sub: current?.sub || '',
-      playing: !!current && !audio.paused,
-      volume: audio.volume,
-    }),
+    setPhoneMedia,
+    getState: () => {
+      const d = display();
+      return { title: d?.name || '', sub: d?.sub || '', playing: !!d?.playing, volume: audio.volume, source };
+    },
     duck(on) { audio.volume = on ? Math.min(audio.volume, 0.25) : store.get('volume', 0.8); },
+    // During phone calls the stereo's own audio must be silent.
+    holdForCall(on) {
+      if (on) { heldForCall = !audio.paused; audio.pause(); } else if (heldForCall) { heldForCall = false; audio.play().catch(() => {}); }
+    },
   };
 }

@@ -216,7 +216,17 @@ export function keepAwake(enabled) {
   return () => { enabled = false; lock?.release?.(); };
 }
 
+// True inside the Car-Auto Android apps (they serve the files from the APK).
+export const inNativeApp = () => !!(window.CarAutoNative || window.CarAutoLink);
+
+// Open a link outside the app: another Android app (Maps, Waze, Spotify…) or a browser tab.
+export function openExternal(url) {
+  if (window.CarAutoNative?.openUrl) return window.CarAutoNative.openUrl(url);
+  window.open(url, '_blank', 'noopener');
+}
+
 export function registerServiceWorker() {
+  if (inNativeApp()) return;
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     navigator.serviceWorker.register('sw.js').catch(() => { /* offline support unavailable */ });
   }

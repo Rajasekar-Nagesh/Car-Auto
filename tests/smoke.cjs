@@ -218,6 +218,122 @@ async function mockNetwork(context) {
     check(osrmCalls >= 1, 'driving off route triggers a reroute (not a false arrival)');
     check(await car.evaluate(() => window.carauto.ctx.nav.getState().active), 'navigation still active after going off route');
 
+    // ---------------- Car-Auto Link (Android phone app) ----------------
+    console.log('Car-Auto Link (native phone bridge, simulated)');
+    await phone.close(); // only one remote, like a real car
+    const linkPage = await context.newPage();
+    linkPage.on('pageerror', (e) => errors.push(`link: ${e.message}`));
+    await linkPage.addInitScript(() => {
+      window.__log = [];
+      const now = Date.now();
+      window.CarAutoLink = {
+        getMedia: () => JSON.stringify({ title: 'Song A', artist: 'Artist A', app: 'Spotify', playing: true, duration: 200000, position: 50000, positionAt: now, speed: 1, art: null, artKey: 'a' }),
+        getCall: () => JSON.stringify({ state: 'idle' }),
+        getContacts: () => JSON.stringify([{ name: 'Alice', number: '111', starred: true }, { name: 'Bob', number: '222', starred: false }]),
+        getRecents: () => JSON.stringify([{ name: 'Alice', number: '111', type: 'missed', date: now - 60000 }]),
+        mediaCmd: (c) => window.__log.push(`media:${c}`),
+        placeCall: (n) => window.__log.push(`call:${n}`),
+        callAction: (a) => window.__log.push(`action:${a}`),
+        onStatus: () => {},
+      };
+    });
+    await linkPage.goto(`${BASE}/phone.html?transport=local&native=1#pair=${code}`);
+    await car.waitForFunction(() => document.querySelector('#media-card [data-np=title]').textContent === 'Song A');
+    check((await car.textContent('#media-card [data-np=sub]')).includes('Spotify'), "car shows the phone's music (Spotify)");
+    check(await car.isVisible('#media-card [data-np=progress]'), 'progress bar for phone track');
+    await car.click('#media-card [data-media=toggle]');
+    await linkPage.waitForFunction(() => window.__log.includes('media:pause'));
+    check(true, 'car play/pause controls the phone app');
+    await car.click('#media-card [data-media=next]');
+    await linkPage.waitForFunction(() => window.__log.includes('media:next'));
+    check(true, 'car next-track controls the phone app');
+
+    await car.click('.rail [data-view=phone]');
+    await car.waitForFunction(() => document.querySelector('#contact-list').textContent.includes('Alice'));
+    check(true, 'starred phone contacts appear in Favorites');
+    await car.click('[data-ptab=recents]');
+    await car.waitForSelector('.row-call.missed');
+    check((await car.textContent('#synced-list')).includes('Alice'), 'recent calls synced from phone');
+    await car.click('[data-ptab=all]');
+    await car.waitForFunction(() => document.querySelector('#synced-list').textContent.includes('Bob'));
+    await car.screenshot({ path: `${SHOTS}/car-contacts.png` });
+    await car.click('#synced-list [data-num="222"]');
+    await linkPage.waitForFunction(() => window.__log.includes('call:222'));
+    check(true, 'tapping a contact places the call on the phone');
+    await car.click('.rail [data-view=home]');
+
+    await linkPage.evaluate(() => window.carautoNative.onEvent({ type: 'call', state: 'ringing', number: '222', name: 'Bob' }));
+    await car.waitForSelector('#call-overlay:not([hidden])');
+    check((await car.textContent('#call-name')) === 'Bob', 'incoming call screen shows the caller');
+    await car.waitForTimeout(200);
+    await car.screenshot({ path: `${SHOTS}/car-incoming-call.png` });
+    await car.click('[data-call=answer]');
+    await linkPage.waitForFunction(() => window.__log.includes('action:answer'));
+    check(true, 'Answer button answers on the phone');
+    await linkPage.evaluate(() => window.carautoNative.onEvent({ type: 'call', state: 'active', number: '222', name: 'Bob', since: Date.now() - 65000 }));
+    await car.waitForSelector('#call-bar:not([hidden])');
+    check(/1:0\d/.test(await car.textContent('#call-timer')), 'in-call bar shows the call timer');
+    await car.screenshot({ path: `${SHOTS}/car-in-call.png` });
+    await car.click('#call-bar [data-call=end]');
+    await linkPage.waitForFunction(() => window.__log.includes('action:end'));
+    await linkPage.evaluate(() => window.carautoNative.onEvent({ type: 'call', state: 'idle' }));
+    await car.waitForSelector('#call-bar', { state: 'hidden' });
+    check(true, 'hanging up clears the call bar');
+    await linkPage.evaluate(() => window.carautoNative.onEvent({ type: 'media', media: { title: 'Song B', artist: 'Artist B', app: 'YouTube Music', playing: true, duration: 0, position: 0, artKey: 'b' } }));
+    await car.waitForFunction(() => document.querySelector('#media-card [data-np=title]').textContent === 'Song B');
+    check(true, 'track changes on the phone update the car');
+    await car.screenshot({ path: `${SHOTS}/car-phone-media.png` });
+
+    // ---------------- Car-Auto Dash (Android stereo app) ----------------
+    console.log('Car-Auto Dash (native stereo bridge, simulated)');
+    const dashCtx = await browser.newContext({ viewport: { width: 1280, height: 720 }, serviceWorkers: 'block' });
+    await mockNetwork(dashCtx);
+    const dash = await dashCtx.newPage();
+    dash.on('pageerror', (e) => errors.push(`dash: ${e.message}`));
+    await dash.addInitScript((icon) => {
+      window.__log = [];
+      window.CarAutoNative = {
+        listApps: () => JSON.stringify([
+          { pkg: 'com.google.android.apps.maps', label: 'Maps', icon },
+          { pkg: 'com.spotify.music', label: 'Spotify', icon },
+          { pkg: 'com.waze', label: 'Waze', icon },
+        ]),
+        launchApp: (p) => { window.__log.push(`launch:${p}`); return true; },
+        openUrl: (u) => window.__log.push(`url:${u}`),
+        dial: (n) => window.__log.push(`dial:${n}`),
+        startVoice: () => setTimeout(() => {
+          window.carautoNative.onEvent({ type: 'voice', partial: 'open spo' });
+          window.carautoNative.onEvent({ type: 'voice', final: 'open spotify' });
+        }, 50),
+        stopVoice: () => {},
+        setMediaState: () => {},
+        getAutoStart: () => true,
+        setAutoStart: (v) => window.__log.push(`autostart:${v}`),
+        needsOverlayPermission: () => true,
+        openSettings: (w) => window.__log.push(`settings:${w}`),
+      };
+    }, `data:image/png;base64,${PNG.toString('base64')}`);
+    await dash.goto(`${BASE}/car.html?transport=local`);
+    await dash.click('.taskbar [data-view=apps]');
+    await dash.waitForSelector('#stereo-apps .launch');
+    check(await dash.locator('#stereo-apps .launch').count() === 3, 'app grid lists apps installed on the stereo');
+    await dash.waitForTimeout(200);
+    await dash.screenshot({ path: `${SHOTS}/dash-apps.png` });
+    await dash.click('#stereo-apps .launch:nth-child(3)');
+    check((await dash.evaluate(() => window.__log)).includes('launch:com.waze'), 'tapping an app launches it');
+    check(await dash.evaluate(() => window.carauto.back()) === true, 'Back key closes the open app');
+    check(await dash.evaluate(() => window.carauto.back()) === false, 'Back on the dashboard is ignored (launcher stays)');
+    await dash.click('#btn-voice');
+    await dash.waitForFunction(() => window.__log.includes('launch:com.spotify.music'));
+    check(true, 'voice "open Spotify" launches the stereo app');
+    await dash.evaluate(() => window.carautoNative.onEvent({ type: 'media', cmd: 'next' }));
+    await dash.click('.taskbar [data-view=apps]');
+    await dash.click('[data-open=settings]');
+    check(await dash.isVisible('#native-card') && await dash.isVisible('#btn-overlay') && !(await dash.isVisible('#get-app-card')), 'native settings (auto-start, home screen) shown in the app');
+    await dash.click('#set-autostart');
+    check((await dash.evaluate(() => window.__log)).includes('autostart:false'), 'auto-start toggle reaches the app');
+    await dashCtx.close();
+
     // Unpaired phone view
     const fresh = await browser.newPage({ viewport: { width: 390, height: 844 } });
     await fresh.goto(`${BASE}/phone.html`);
