@@ -23,8 +23,8 @@ android {
         applicationId = "app.carauto.link"
         minSdk = 26
         targetSdk = 34
-        versionCode = 3
-        versionName = "1.2"
+        versionCode = 4
+        versionName = "1.3"
     }
 
     signingConfigs {
@@ -39,22 +39,6 @@ android {
             enableV1Signing = true
             enableV2Signing = true
             enableV3Signing = true
-        }
-    }
-
-    // standard: installs from a browser/file manager (no notification access).
-    // full: adds notification access for track title + album art; Play Protect
-    //       blocks that permission for browser installs in some countries, so
-    //       install it with `adb install`. Same package, so full installs over standard.
-    flavorDimensions += "edition"
-    productFlavors {
-        create("standard") {
-            dimension = "edition"
-            isDefault = true
-        }
-        create("full") {
-            dimension = "edition"
-            versionNameSuffix = "-full"
         }
     }
 
