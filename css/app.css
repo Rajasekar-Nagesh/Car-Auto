@@ -524,3 +524,21 @@ body.in-call .map-top { margin-top: 84px; }
 .reply-sheet { align-items: stretch; gap: 14px; font-size: 1.1rem; }
 .reply-sheet .chips { gap: 10px; }
 .reply-sheet .row { justify-content: flex-end; }
+
+/* Bluetooth audio panel */
+.bt-panel { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 14px; padding: 32px; min-height: 100%; }
+.bt-panel p { margin: 0; max-width: 520px; }
+.bt-icon { width: 88px; height: 88px; border-radius: 50%; background: #1a73e8; display: flex; align-items: center; justify-content: center; }
+.bt-icon svg { width: 48px; height: 48px; fill: #fff; }
+
+/* Mic in the map search bar */
+.pill-mic { width: 48px; height: 48px; margin-right: -10px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex: none; background: var(--surface-2); }
+.pill-mic svg { width: 26px; height: 26px; fill: var(--primary); }
+
+/* Vector map (MapLibre) */
+.maplibregl-map { font: inherit; }
+body.night-map.map-vector .maplibregl-canvas { filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.92) saturate(0.6); }
+.maplibregl-ctrl-bottom-right { margin-right: 96px; }
+.maplibregl-ctrl-attrib.maplibregl-compact { background: #0007; color: #ccc; }
+.fab.compass { top: 86px; color: var(--text); }
+.fab.compass svg { transition: transform .15s linear; width: 30px; height: 30px; }

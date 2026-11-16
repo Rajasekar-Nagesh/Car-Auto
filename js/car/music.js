@@ -58,7 +58,9 @@ export function createMusic(ctx) {
   let listDirty = true;
   // Media playing on the paired Android phone (via the Car-Auto Link app).
   let phoneMedia = null;
-  let source = 'local'; // 'local' | 'phone'
+  let btMedia = null; // what the stereo's Bluetooth app reports (Car-Auto Dash app)
+  let btPlaying = false;
+  let source = 'local'; // 'local' | 'phone' | 'bt'
   let progressTimer = 0;
   let heldForCall = false;
 
@@ -96,13 +98,56 @@ export function createMusic(ctx) {
 
   function takeOverFromPhone() {
     if (source === 'phone' && phoneMedia?.playing) ctx.phoneLink?.send({ t: 'pmedia', cmd: 'pause' });
+    if (source === 'bt' && (btMedia?.playing || btPlaying)) btCmd('pause');
+    btPlaying = false;
     source = 'local';
+  }
+
+  // ---- Bluetooth audio (phone → stereo over Bluetooth) ----
+  const nativeApp = window.CarAutoNative || null;
+  function btCmd(cmd) {
+    if (nativeApp?.btCmd) nativeApp.btCmd(cmd);
+    else if (ctx.phoneLink?.available()) ctx.phoneLink.send({ t: 'pmedia', cmd });
+    else toast("Use your stereo's Bluetooth music app, or connect Car-Auto Link");
+  }
+
+  // Switch to Bluetooth: stop the radio and start the phone over Bluetooth.
+  function useBluetooth({ switchStereo = false } = {}) {
+    if (!audio.paused) audio.pause();
+    source = 'bt';
+    if (switchStereo && nativeApp?.switchToBluetooth) {
+      if (!nativeApp.switchToBluetooth()) toast("Couldn't find the stereo's Bluetooth music app");
+    }
+    btCmd('play');
+    btPlaying = true;
+    render();
+  }
+
+  function setBtMedia(m) {
+    if (!m || !m.pkg) { btMedia = null; render(); return; }
+    const prevArt = btMedia && btMedia.artKey === m.artKey ? btMedia.art : null;
+    const started = m.playing && !btMedia?.playing;
+    btMedia = { ...m, art: m.art !== undefined ? m.art : prevArt, receivedAt: Date.now() };
+    btPlaying = !!m.playing;
+    if (started && m.bluetooth) {
+      source = 'bt';
+      if (!audio.paused) audio.pause();
+    }
+    render();
   }
 
   const phoneCmd = (cmd) => ctx.phoneLink?.send({ t: 'pmedia', cmd });
   const phoneActive = () => source === 'phone' && phoneMedia && ctx.phoneLink?.available();
 
   function toggle() {
+    if (source === 'bt') {
+      const playing = btMedia ? btMedia.playing : btPlaying;
+      btCmd(playing ? 'pause' : 'play');
+      btPlaying = !playing;
+      if (btMedia) btMedia.playing = !playing;
+      render();
+      return;
+    }
     if (phoneActive()) {
       if (phoneMedia.keysOnly) {
         // Standard phone app: no track info, so toggle and track the state here.
@@ -129,13 +174,21 @@ export function createMusic(ctx) {
     else audio.pause();
   }
 
-  const pause = () => (phoneActive() ? phoneCmd('pause') : audio.pause());
+  const pause = () => {
+    if (source === 'bt') { btCmd('pause'); btPlaying = false; return render(); }
+    return phoneActive() ? phoneCmd('pause') : audio.pause();
+  };
   const resume = () => {
+    if (source === 'bt') { btCmd('play'); btPlaying = true; return render(); }
     if (phoneActive()) return phoneCmd('play');
     return current ? audio.play().catch(() => {}) : localToggle();
   };
-  const next = () => (phoneActive() ? phoneCmd('next') : queue.length && play(queue, index + 1));
+  const next = () => {
+    if (source === 'bt') return btCmd('next');
+    return phoneActive() ? phoneCmd('next') : queue.length && play(queue, index + 1);
+  };
   const prev = () => {
+    if (source === 'bt') return btCmd('prev');
     if (phoneActive()) return phoneCmd('prev');
     if (current?.kind === 'file' && audio.currentTime > 4) audio.currentTime = 0;
     else if (queue.length) play(queue, index - 1);
@@ -163,6 +216,16 @@ export function createMusic(ctx) {
   }
 
   function display() {
+    if (source === 'bt') {
+      const m = btMedia?.title ? btMedia : (phoneMedia && !phoneMedia.keysOnly ? phoneMedia : null);
+      return {
+        kind: 'bt',
+        name: m?.title || 'Bluetooth audio',
+        sub: m ? [m.artist, 'Bluetooth'].filter(Boolean).join(' · ') : 'Playing from your phone over Bluetooth',
+        art: m?.art || '',
+        playing: btMedia ? !!btMedia.playing : btPlaying,
+      };
+    }
     if (source === 'phone' && phoneMedia) {
       return {
         kind: 'phone',
@@ -183,6 +246,10 @@ export function createMusic(ctx) {
   }
 
   function progressNow() {
+    if (source === 'bt' && btMedia?.duration > 0) {
+      const elapsed = btMedia.playing ? (Date.now() - (btMedia.positionAt || btMedia.receivedAt)) * (btMedia.speed || 1) : 0;
+      return Math.min(1, Math.max(0, (btMedia.position + elapsed) / btMedia.duration));
+    }
     if (source === 'phone' && phoneMedia?.duration > 0) {
       const elapsed = phoneMedia.playing ? (Date.now() - (phoneMedia.positionAt || phoneMedia.receivedAt)) * (phoneMedia.speed || 1) : 0;
       return Math.min(1, Math.max(0, (phoneMedia.position + elapsed) / phoneMedia.duration));
@@ -324,6 +391,20 @@ export function createMusic(ctx) {
 
   function renderList() {
     const list = listFor(tab);
+    if (tab === 'bt') {
+      const appName = nativeApp?.bluetoothAppName?.() || '';
+      const infoAllowed = nativeApp?.btInfoAllowed ? nativeApp.btInfoAllowed() : true;
+      el.list.innerHTML = `<div class="bt-panel">
+        <div class="bt-icon"><svg viewBox="0 0 24 24"><path d="M17.7 7.7 12 2h-1v7.6L6.4 5 5 6.4l5.6 5.6L5 17.6 6.4 19l4.6-4.6V22h1l5.7-5.7-4.3-4.3zM13 5.8l1.9 1.9L13 9.6zm1.9 10.5L13 18.2v-3.8z"/></svg></div>
+        <b>Bluetooth audio</b>
+        <p class="muted">Plays whatever is on your phone (Spotify, YouTube Music…) through the car speakers over Bluetooth.</p>
+        <button class="btn primary big" data-bt="play">▶ Play via Bluetooth</button>
+        ${nativeApp?.switchToBluetooth ? `<button class="btn" data-bt="switch">Switch stereo to Bluetooth audio${appName ? ` (${escapeHtml(appName)})` : ''}</button>` : ''}
+        ${nativeApp?.allowBtInfo && !infoAllowed ? '<button class="btn" data-bt="info">Show song names (allow notification access)</button>' : ''}
+        <p class="muted small">Your phone must be connected to the stereo over Bluetooth. No sound? Tap “Switch stereo to Bluetooth audio”${nativeApp ? '' : " or open the stereo's Bluetooth music app"}.</p>
+      </div>`;
+      return;
+    }
     if (tab === 'phone' && !list.length) {
       el.list.innerHTML = `<div class="empty"><p>${ctx.phoneLink?.available() ? 'Loading songs from your phone…' : 'Connect Car-Auto Link on your phone to play its music.'}</p>
         <p class="muted small">In Car-Auto Link, allow <b>Music and audio</b>.</p></div>`;
@@ -353,7 +434,7 @@ export function createMusic(ctx) {
     if (artKey !== lastArt) {
       lastArt = artKey;
       el.art.forEach((n) => {
-        n.innerHTML = d?.art ? `<img src="${escapeHtml(d.art)}" alt="" decoding="async" onerror="this.remove()">` : (d?.kind === 'phone' ? '📱' : d?.kind === 'file' ? '🎵' : '📻');
+        n.innerHTML = d?.art ? `<img src="${escapeHtml(d.art)}" alt="" decoding="async" onerror="this.remove()">` : (d?.kind === 'bt' ? '🎧' : d?.kind === 'phone' ? '📱' : d?.kind === 'file' ? '🎵' : '📻');
       });
       el.bg.forEach((n) => {
         n.style.backgroundImage = d?.art ? `url("${d.art.replace(/"/g, '%22')}")` : '';
@@ -379,6 +460,10 @@ export function createMusic(ctx) {
   }
 
   el.list.addEventListener('click', (e) => {
+    const bt = e.target.closest('[data-bt]')?.dataset.bt;
+    if (bt === 'play') return useBluetooth();
+    if (bt === 'switch') return useBluetooth({ switchStereo: true });
+    if (bt === 'info') return nativeApp?.allowBtInfo();
     const fav = e.target.closest('[data-fav]');
     const row = e.target.closest('.track');
     if (!row) return;
@@ -444,6 +529,8 @@ export function createMusic(ctx) {
     },
     openTab(name) { tab = name; renderTabs(); if (name === 'browse' && !browseRows.length) loadBrowse(); else renderList(); },
     setPhoneMedia,
+    setBtMedia,
+    useBluetooth,
     getState: () => {
       const d = display();
       return { title: d?.name || '', sub: d?.sub || '', playing: !!d?.playing, volume: audio.volume, source };

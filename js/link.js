@@ -68,11 +68,14 @@ class Base extends EventTarget {
 // Car side
 // ---------------------------------------------------------------------------
 export class CarHost extends Base {
-  constructor(code, { transport = 'peer', server = null } = {}) {
+  // lan: the Car-Auto Dash bridge (window.CarAutoNative) when running in the
+  // stereo app; it serves phones directly over the hotspot/Wi-Fi.
+  constructor(code, { transport = 'peer', server = null, lan = null } = {}) {
     super();
     this.code = code;
     this.transport = transport;
     this.server = server;
+    this.lan = lan?.lanStart ? lan : null;
     this.clients = new Map(); // id -> { send, lastSeen, close }
     this.state = 'offline';
     this._timers = [];
@@ -84,6 +87,9 @@ export class CarHost extends Base {
 
   start() {
     this._stopped = false;
+    if (this.lan) {
+      try { this.lan.lanStart(this.code); } catch { this.lan = null; }
+    }
     if (this.transport === 'local') this._startLocal();
     else this._startPeer();
     this._timers.push(setInterval(() => this._heartbeat(), HEARTBEAT_MS));
@@ -98,6 +104,21 @@ export class CarHost extends Base {
     this.clients.clear();
     this.peer?.destroy();
     this.channel?.close();
+  }
+
+  // Events from the stereo app's local server: {ev: 'open'|'msg'|'close', id, data}
+  lanEvent(ev) {
+    if (!this.lan || this._stopped) return;
+    const id = `lan:${ev.id}`;
+    if (ev.ev === 'open') {
+      this._addClient(id, (m) => this.lan.lanSend(ev.id, JSON.stringify(m)), () => this.lan.lanClose(ev.id));
+    } else if (ev.ev === 'msg') {
+      let m;
+      try { m = JSON.parse(ev.data); } catch { return; }
+      this._receive(id, m);
+    } else if (ev.ev === 'close') {
+      this._removeClient(id);
+    }
   }
 
   broadcast(msg) {
@@ -199,8 +220,12 @@ export class CarHost extends Base {
 // Phone side
 // ---------------------------------------------------------------------------
 export class PhoneClient extends Base {
-  constructor(code, { transport = 'peer', server = null, name = 'Phone', caps = null } = {}) {
+  // lan: the Car-Auto Link bridge (window.CarAutoLink) — finds the stereo on
+  // the local network and connects directly before trying the internet.
+  constructor(code, { transport = 'peer', server = null, name = 'Phone', caps = null, lan = null } = {}) {
     super();
+    this.lan = lan?.discoverCar ? lan : null;
+    this.via = null;
     this.code = code;
     this.transport = transport;
     this.server = server;
@@ -232,6 +257,8 @@ export class PhoneClient extends Base {
     clearTimeout(this._retry);
     document.removeEventListener('visibilitychange', this._onVisible);
     if (this.transport === 'local') this.channel?.postMessage({ to: 'car', from: this.id, msg: { t: 'bye' } });
+    this.ws?.close();
+    if (this.via === 'bluetooth') this.lan?.btClose?.();
     this.conn?.close();
     this.peer?.destroy();
     this.channel?.close();
@@ -251,7 +278,86 @@ export class PhoneClient extends Base {
 
   _rawSend(msg) {
     if (this.transport === 'local') this.channel.postMessage({ to: 'car', from: this.id, msg });
+    else if (this.via === 'bluetooth') this.lan.btSend(JSON.stringify(msg));
+    else if (this.ws?.readyState === 1) this.ws.send(JSON.stringify(msg));
     else if (this.conn?.open) this.conn.send(msg);
+  }
+
+  // Called by the phone app when the native local-network search finishes.
+  lanFound(addr) {
+    const w = this._lanWaiter;
+    this._lanWaiter = null;
+    w?.(addr || '');
+  }
+
+  _tryBt() {
+    return new Promise((resolve) => {
+      this._btWaiter = resolve;
+      try { this.lan.btConnect(this.code); } catch { this._btDone(false); }
+      setTimeout(() => { if (this._btWaiter === resolve) this._btDone(false); }, 25000);
+    });
+  }
+
+  _btDone(ok) {
+    const w = this._btWaiter;
+    this._btWaiter = null;
+    w?.(ok);
+  }
+
+  // Events from the phone app's Bluetooth link: {ev: 'open'|'fail'|'msg'|'close', data}
+  btEvent(ev) {
+    if (ev.ev === 'open') {
+      if (this.connected || this._stopped) { this.lan.btClose?.(); return; }
+      this.via = 'bluetooth';
+      this._btDone(true);
+      this._connected();
+    } else if (ev.ev === 'fail') {
+      this._btDone(false);
+    } else if (ev.ev === 'msg') {
+      let m;
+      try { m = JSON.parse(ev.data); } catch { return; }
+      this._receive(m);
+    } else if (ev.ev === 'close') {
+      if (this.via === 'bluetooth' && this.connected) this._dropped('Bluetooth link lost');
+    }
+  }
+
+  _findLan() {
+    return new Promise((resolve) => {
+      this._lanWaiter = resolve;
+      try { this.lan.discoverCar(this.code); } catch { this.lanFound(''); }
+      setTimeout(() => { if (this._lanWaiter === resolve) this.lanFound(''); }, 3500);
+    });
+  }
+
+  _connectWs(addr) {
+    let opened = false;
+    let ws;
+    try {
+      ws = new WebSocket(`ws://${addr}/${encodeURIComponent(this.code)}`);
+    } catch {
+      this._connectPeer();
+      return;
+    }
+    ws.onopen = () => {
+      opened = true;
+      this.ws = ws;
+      this.via = 'lan';
+      this._connected();
+    };
+    ws.onmessage = (e) => {
+      let m;
+      try { m = JSON.parse(e.data); } catch { return; }
+      this._receive(m);
+    };
+    ws.onclose = () => {
+      if (this.ws === ws) {
+        this.ws = null;
+        this._dropped('Disconnected from car');
+      } else if (!opened && !this._stopped && !this.connected) {
+        this._connectPeer(); // local link refused: fall back to the internet
+      }
+    };
   }
 
   _status(state, message = '') {
@@ -272,6 +378,11 @@ export class PhoneClient extends Base {
   _dropped(message) {
     const was = this.connected;
     this.connected = false;
+    if (this.via === 'bluetooth') this.lan?.btClose?.();
+    this.via = null;
+    const ws = this.ws;
+    this.ws = null;
+    ws?.close();
     this.conn?.close();
     this.conn = null;
     if (was || message) this._status('disconnected', message || 'Disconnected');
@@ -291,12 +402,36 @@ export class PhoneClient extends Base {
     this.emit('message', msg);
   }
 
-  _connect() {
-    if (this._stopped || this.connected) return;
+  async _connect() {
+    if (this._stopped || this.connected || this._searching) return;
     this._status('connecting');
     if (this.transport === 'local') return this._connectLocal();
+    // 1) Direct on the local network (phone hotspot / same Wi-Fi): no internet needed.
+    if (this.lan) {
+      this._searching = true;
+      this._status('connecting', 'Looking for your car nearby…');
+      const addr = await this._findLan();
+      this._searching = false;
+      if (this._stopped || this.connected) return;
+      if (addr) return this._connectWs(addr);
+      // 2) Bluetooth, over the pairing the phone already has with the stereo.
+      if (this.lan.btConnect) {
+        this._searching = true;
+        this._status('connecting', 'Trying Bluetooth…');
+        const ok = await this._tryBt();
+        this._searching = false;
+        if (this._stopped || this.connected || ok) return;
+      }
+    }
+    // 2) Over the internet (WebRTC).
+    this._connectPeer();
+  }
+
+  _connectPeer() {
+    if (this._stopped || this.connected) return;
+    this._status('connecting', 'Connecting over the internet…');
     if (!window.Peer) {
-      loadPeerJs().then(() => this._connect()).catch(() => {
+      loadPeerJs().then(() => this._connectPeer()).catch(() => {
         this._status('error', 'Connection library failed to load. Retrying…');
         this._scheduleRetry();
       });
@@ -311,7 +446,9 @@ export class PhoneClient extends Base {
       peer.on('error', (err) => {
         if (this._stopped) return;
         if (err.type === 'peer-unavailable') {
-          this._status('error', 'Car not found. Is the car app open and online?');
+          this._status('error', this.lan
+            ? "Car not found. Is Car-Auto open on the stereo, and is the stereo on your phone's hotspot?"
+            : 'Car not found. Is the car app open and online?');
         } else {
           this._status('error', 'No connection to the pairing server. Retrying…');
           peer.destroy();
@@ -328,11 +465,22 @@ export class PhoneClient extends Base {
     const conn = this.peer.connect(peerIdFor(this.code), { reliable: true, serialization: 'json' });
     conn.on('open', () => {
       this.conn = conn;
+      this.via = 'internet';
       this._connected();
     });
     conn.on('data', (d) => this._receive(d));
     conn.on('close', () => this.conn === conn && this._dropped('Disconnected from car'));
     conn.on('error', () => this.conn === conn && this._dropped('Connection error'));
+    // Without a direct path or relay, WebRTC can hang: give up and retry (LAN first again).
+    setTimeout(() => {
+      if (!conn.open && !this.connected && !this._stopped) {
+        conn.close();
+        this._status('error', this.lan
+          ? "Couldn't connect over the internet. Connect the stereo to your phone's hotspot for a direct link."
+          : "Couldn't reach the car over the internet. Retrying…");
+        this._dropped();
+      }
+    }, 15000);
   }
 
   _connectLocal() {

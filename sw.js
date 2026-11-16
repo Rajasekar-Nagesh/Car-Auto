@@ -2,7 +2,7 @@
 // dashboard opens instantly, even without signal. Map tiles are cached as you drive (up to a limit) so
 // recently seen areas still show when coverage drops.
 
-const VERSION = 'v5';
+const VERSION = 'v6';
 const SHELL = `carauto-shell-${VERSION}`;
 const TILES = 'carauto-tiles';
 const MAX_TILES = 1500;
@@ -16,6 +16,7 @@ const ASSETS = [
   'vendor/leaflet/leaflet.js', 'vendor/leaflet/leaflet.css',
   'vendor/leaflet/images/marker-icon.png', 'vendor/leaflet/images/marker-icon-2x.png', 'vendor/leaflet/images/marker-shadow.png',
   'vendor/peerjs/peerjs.min.js', 'vendor/qrcode/qrcode.js',
+  'vendor/maplibre/maplibre-gl.js', 'vendor/maplibre/maplibre-gl.css', 'js/car/mapview.js',
   'manifest-car.webmanifest', 'manifest-phone.webmanifest',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png',
 ];
@@ -44,7 +45,7 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
 
   // Map tiles: network first, fall back to cache.
-  if (url.hostname === 'tile.openstreetmap.org') {
+  if (url.hostname === 'tile.openstreetmap.org' || url.hostname === 'tiles.openfreemap.org') {
     e.respondWith(
       fetch(req).then((res) => {
         if (res.ok || res.type === 'opaque') {

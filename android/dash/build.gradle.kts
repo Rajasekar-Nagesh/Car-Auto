@@ -23,8 +23,8 @@ android {
         applicationId = "app.carauto.dash"
         minSdk = 21
         targetSdk = 34
-        versionCode = 3
-        versionName = "1.2"
+        versionCode = 6
+        versionName = "1.5"
     }
 
     signingConfigs {

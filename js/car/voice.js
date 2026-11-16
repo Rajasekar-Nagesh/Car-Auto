@@ -22,6 +22,7 @@ export function parseCommand(text) {
   if (/^(volume up|louder|turn it up)$/.test(t)) return { cmd: 'volume', delta: 0.15 };
   if (/^(volume down|quieter|softer|turn it down)$/.test(t)) return { cmd: 'volume', delta: -0.15 };
   if (/^(play|resume)( music| the music| radio| the radio)?$/.test(t)) return { cmd: 'play' };
+  if (/^(play |use |switch to )?(via |from |over )?(bluetooth|bt)( music| audio)?$/.test(t)) return { cmd: 'bluetooth' };
   if ((m = t.match(/^play (.+?)(?: radio| station)?$/))) return { cmd: 'playSearch', query: m[1] };
   if (/what time is it|what's the time|tell me the time/.test(t)) return { cmd: 'time' };
   if (/^(trip|vehicle)( info| status| summary| details)?$|how far (have i|did i) (driven|drive|gone)|what('s| is) my mileage|how long have i been driving/.test(t)) return { cmd: 'trip' };
@@ -67,6 +68,7 @@ export function createVoice(ctx) {
       case 'view': return ctx.showView(c.view);
       case 'callAction': return ctx.calls.action(c.action);
       case 'androidAuto': return ctx.startAndroidAuto();
+      case 'bluetooth': return ctx.music.useBluetooth({ switchStereo: true });
       case 'trip': return ctx.voice(ctx.vehicle.summary());
       case 'readMessages': return ctx.messages.readLatest();
       case 'reply': return ctx.messages.replyLatest(c.text);
@@ -113,10 +115,10 @@ export function createVoice(ctx) {
       execute(text);
     }
   }
-  function dictate(cb) {
+  function dictate(cb, prompt = 'Speak your reply…') {
     dictateCb = cb;
     listen();
-    transcript.textContent = 'Speak your reply…';
+    transcript.textContent = prompt;
   }
 
   function listen() {

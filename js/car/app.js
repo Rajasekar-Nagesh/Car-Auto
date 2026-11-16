@@ -138,10 +138,29 @@ ctx.vehicle = vehicle;
 bus.on('notify', ({ from, text }) => showMessage(from, text, { silent: true }));
 
 // Steering-wheel / hardware media keys forwarded by the Android app.
+// Direct local-network connections from Car-Auto Link (stereo app's local server).
+bus.on('native:lan', (ev) => host?.lanEvent(ev));
+
+// Bluetooth audio info from the stereo's Bluetooth app (Car-Auto Dash).
+bus.on('native:btmedia', ({ media }) => music.setBtMedia(media));
+if (native?.getBtMedia) {
+  try { music.setBtMedia(JSON.parse(native.getBtMedia())); } catch { /* none yet */ }
+}
+
 bus.on('native:media', ({ cmd }) => ({ play: music.resume, pause: music.pause, toggle: music.toggle, next: music.next, prev: music.prev }[cmd])?.());
 bus.on('recents', () => home.refreshSuggestions());
 
 $('#btn-voice').addEventListener('click', () => voice.listen());
+
+// Voice typing in the map search bar.
+$('#nav-search-mic').addEventListener('click', () => {
+  voice.dictate((text) => {
+    if (!text) return toast("Didn't catch that. Try again.");
+    // "navigate to X" / "take me to X" → just the place name
+    const place = text.replace(/^(navigate|directions|take me|drive|go|get me)( me)? to /i, '').trim();
+    nav.search(place);
+  }, 'Where to? Say a place or address');
+});
 const setSpeedUnit = () => { $('#speed-unit').textContent = settings.units === 'mi' ? 'mph' : 'km/h'; };
 setSpeedUnit();
 
@@ -378,7 +397,7 @@ function pairHelpText() {
 
 function startLink() {
   host?.stop();
-  host = new CarHost(code, { transport: transportFromUrl(), server: settings.peerServer });
+  host = new CarHost(code, { transport: transportFromUrl(), server: settings.peerServer, lan: native });
   host.on('status', ({ state, message }) => {
     linkState = state;
     $('#pair-status').textContent = state === 'online' ? 'Online — ready for phones' : message || state;
@@ -488,6 +507,9 @@ function handlePhoneMessage(msg, reply, id) {
 async function renderPairing() {
   $('#pair-code').textContent = code;
   $('#pair-help').innerHTML = pairHelpText();
+  $('#link-ways').textContent = native?.lanStart
+    ? `Phones connect directly over your phone's hotspot${native.bluetoothLinkAvailable?.() ? ', over Bluetooth' : ''}, or over the internet.${native.bluetoothLinkAvailable && !native.bluetoothLinkAvailable() ? " (Bluetooth link: this stereo doesn't let apps use Bluetooth, or it's off.)" : ''}`
+    : '';
   const url = phoneUrl();
   $('#pair-url').textContent = url;
   try {

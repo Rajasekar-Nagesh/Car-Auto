@@ -57,8 +57,94 @@ class DashBridge(private val activity: MainActivity, private val web: WebView) {
 
     private fun emitVoice(key: String, value: String) = emit(JSONObject().put("type", "voice").put(key, value))
 
+    /** Direct local-network link to Car-Auto Link on the phone (no internet needed). */
+    private val lan = LanServer(activity) { event -> emit(event) }
+    /** Same link over Bluetooth, for stereos whose Bluetooth apps can use. */
+    private val bt = BtServer(activity) { event -> emit(event) }
+
+    @JavascriptInterface
+    fun lanStart(code: String) {
+        lan.start(code)
+        bt.start(code)
+    }
+
+    @JavascriptInterface
+    fun lanSend(id: Int, text: String) = if (bt.owns(id)) bt.send(id, text) else lan.send(id, text)
+
+    @JavascriptInterface
+    fun lanClose(id: Int) = if (bt.owns(id)) bt.close(id) else lan.close(id)
+
+    @JavascriptInterface
+    fun lanStop() {
+        lan.stop()
+        bt.stop()
+    }
+
+    /** Whether this stereo lets apps use Bluetooth (shown in Settings). */
+    @JavascriptInterface
+    fun bluetoothLinkAvailable(): Boolean = bt.available()
+
+    init {
+        DashMedia.emit = { event -> emit(event) }
+        DashMedia.start(activity)
+    }
+
     @JavascriptInterface
     fun version(): Int = 1
+
+    // ---- Bluetooth audio from the phone (through the stereo's Bluetooth app) ----
+
+    @JavascriptInterface
+    fun getBtMedia(): String = DashMedia.json(true)?.toString() ?: "null"
+
+    @JavascriptInterface
+    fun btCmd(cmd: String) {
+        main.post { DashMedia.cmd(activity, cmd) }
+    }
+
+    /** True once notification access is granted on the stereo (needed for song info). */
+    @JavascriptInterface
+    fun btInfoAllowed(): Boolean = DashMedia.hasAccess(activity)
+
+    @JavascriptInterface
+    fun allowBtInfo() {
+        main.post {
+            val detail = if (Build.VERSION.SDK_INT >= 30) {
+                Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)
+                    .putExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, DashMedia.listenerComponent(activity).flattenToString())
+            } else {
+                null
+            }
+            val ok = detail != null && runCatching { activity.startActivity(detail.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
+            if (!ok) runCatching { activity.startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        }
+    }
+
+    /** Name of the stereo's Bluetooth music app, or "" if none was found. */
+    @JavascriptInterface
+    fun bluetoothAppName(): String = DashMedia.findBluetoothApp(activity)?.second ?: ""
+
+    /**
+     * Many stereos only route Bluetooth sound once their own Bluetooth music
+     * app has been opened: open it, then come straight back to Car-Auto.
+     */
+    @JavascriptInterface
+    fun switchToBluetooth(): Boolean {
+        val app = DashMedia.findBluetoothApp(activity) ?: return false
+        val launch = activity.packageManager.getLaunchIntentForPackage(app.first) ?: return false
+        main.post {
+            runCatching { activity.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            main.postDelayed({
+                runCatching {
+                    activity.startActivity(
+                        Intent(activity, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                }
+                DashMedia.start(activity)
+            }, 1800)
+        }
+        return true
+    }
 
     // ---- Apps on the stereo ----
 
@@ -244,6 +330,8 @@ class DashBridge(private val activity: MainActivity, private val web: WebView) {
     }
 
     fun release() {
+        lan.stop()
+        bt.stop()
         recognizer?.destroy()
         session.release()
     }

@@ -16,7 +16,7 @@ It comes in two parts. Each one is available as an Android app (full experience)
 | Split-screen dashboard: live map, media card, weather, next turns, quick dial | — |
 | **Trip computer**: start time, running hours, trip distance, odometer, fuel mileage (km/l), service reminder, trip history | — |
 | **Maps** with turn-by-turn voice guidance, rerouting, Home/Work, recent places; hand off to **Google Maps** or **Waze** | — |
-| **Music**: internet radio, favorites, files from the stereo or USB | — |
+| **Music**: internet radio, favorites, files from the stereo or USB, and **Play via Bluetooth** (your phone's audio through the stereo's Bluetooth, with controls; song names with notification access on the stereo) | — |
 | **Your phone's music on the car screen**: whatever plays in Spotify, YouTube Music, podcasts… with album art, progress and controls | Car-Auto Link |
 | **Incoming call screen** (Answer / Decline), in-call bar with timer and End | Car-Auto Link |
 | **Messages** from WhatsApp, SMS, Telegram… pop up on the car, read aloud; **reply** with quick replies or by voice | Car-Auto Link |
@@ -82,7 +82,7 @@ How it works without a car connection: the stereo turns on with the ignition, so
 
 * The stereo and phone connect directly over WebRTC. Pairing uses an 8-character code. The free public PeerJS server only introduces the two devices; you can run your own (see *Advanced*). Both devices need internet: turn on your phone's hotspot and connect the stereo to it.
 * **Sound still travels over Bluetooth**, exactly as it does today. Car-Auto adds the screen, the controls and the call handling.
-* Maps from OpenStreetMap, routes from OSRM, search from Nominatim, radio from radio-browser.info, weather from Open-Meteo. All free, no API keys.
+* Maps: vector maps from OpenFreeMap (OpenStreetMap data) drawn with MapLibre: rotate with two fingers, tilt, heading-up while navigating, place names at every zoom; stereos without WebGL fall back to OpenStreetMap image tiles. Routes from OSRM, search from Nominatim, radio from radio-browser.info, weather from Open-Meteo. All free, no API keys.
 
 ## 1. Publish it (one time, about 10 minutes)
 
@@ -154,7 +154,8 @@ Tap the microphone in the taskbar (or press the steering-wheel voice button with
 * **"App blocked to protect your device" (Play Protect):** see *Set up your phone* above for the three ways to install.
 * **Phone music doesn't show:** check that *Notification access* has a ✓ in Car-Auto Link. Until it's allowed, the car shows "Music on your phone" with play/pause/skip only.
 * **Calls don't show:** check *Phone, contacts & call log* has a ✓. Some phone brands also need Car-Auto Link set to "No restrictions" under battery settings.
-* **"Car not found":** Car-Auto Dash must be open on the stereo and show *Online — ready for phones* in Settings; both devices need internet.
+* **"Car not found" / "Connection error":** with both Android apps, the phone connects **directly over the hotspot**: connect the stereo to your phone's Wi-Fi hotspot, keep Car-Auto Dash open, and Car-Auto Link shows *Connected to your car (direct…)*. Without the hotspot it falls back to the internet, which needs both devices online and can fail on some mobile networks.
+* **Bluetooth link:** if there's no hotspot, Car-Auto Link connects over Bluetooth using the pairing the phone already has with the stereo (pick the stereo under *Start automatically when connected to*). Some stereos run Bluetooth on a separate chip apps can't use; the stereo's Settings → Pair your phone says whether Bluetooth linking is available.
 * **Auto-start doesn't happen:** many stereos sleep instead of shutting down when the car turns off, so they never "boot". Use **Use as home screen** instead.
 * **A radio station won't play:** stations that only stream over plain HTTP are hidden; try another.
 * **Steering-wheel buttons** go to whatever is playing (Car-Auto radio or your phone's music).

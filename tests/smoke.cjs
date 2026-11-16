@@ -52,6 +52,14 @@ function check(cond, msg) {
 
 async function mockNetwork(context) {
   await context.route(/tile\.openstreetmap\.org/, (r) => r.fulfill({ body: PNG, contentType: 'image/png' }));
+  await context.route(/photon\.komoot\.io/, (r) => {
+    const q = new URL(r.request().url()).searchParams.get('q') || '';
+    r.fulfill({ json: { features: [
+      { properties: { name: `${q} Mall`, street: 'MG Road', city: 'Bengaluru', state: 'Karnataka', country: 'India' }, geometry: { coordinates: [C[0], C[1]] } },
+      { properties: { name: `${q} Park`, city: 'Bengaluru', country: 'India' }, geometry: { coordinates: [77.6, 12.97] } },
+    ] } });
+  });
+  await context.route(/tiles\.openfreemap\.org/, (r) => r.fulfill({ json: { version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#e8eaed' } }] } }));
   await context.route(/nominatim\.openstreetmap\.org/, (r) => r.fulfill({ json: NOMINATIM }));
   await context.route(/router\.project-osrm\.org/, (r) => r.fulfill({ json: OSRM }));
   await context.route(/api\.open-meteo\.com/, (r) => r.fulfill({ json: { current: { temperature_2m: 27.4, weather_code: 1 } } }));
@@ -182,6 +190,19 @@ async function mockNetwork(context) {
     check(/^(80|90|100) m$/.test(d1.trim()), `distance to turn updates from phone GPS (${d1.trim()})`);
     await car.screenshot({ path: `${SHOTS}/car-navigating.png` });
     check(await car.locator('#tile-nav .step').count() >= 1, 'dashboard card lists upcoming turns');
+    const mapInfo = await car.evaluate(() => { const v = window.carauto.ctx.nav.map; return { kind: v.kind, bearing: v.getBearing(), pitch: v.raw.getPitch ? v.raw.getPitch() : 0 }; });
+    check(mapInfo.kind === 'vector', `vector map in use (${mapInfo.kind})`);
+    check(await car.isVisible('#btn-compass'), 'compass button shown');
+    await send(12.9737, 77.5946);
+    await car.waitForTimeout(1400);
+    const hu = await car.evaluate(() => { const v = window.carauto.ctx.nav.map; return { pitch: v.raw.getPitch(), bearing: v.getBearing() }; });
+    check(hu.pitch > 30, `heading-up navigation tilts and follows the car (pitch ${Math.round(hu.pitch)}°)`);
+    await car.click('#btn-compass');
+    await car.waitForTimeout(600);
+    check(Math.round(await car.evaluate(() => window.carauto.ctx.nav.map.getBearing())) === 0, 'compass switches to north-up');
+    await car.click('#btn-compass');
+    await car.evaluate(() => window.carauto.ctx.nav.map.raw.setBearing(35));
+    check(Math.round(await car.evaluate(() => window.carauto.ctx.nav.map.getBearing())) === 35, 'map can be rotated');
     await car.click('#btn-expand');
     await car.waitForTimeout(200);
     await car.screenshot({ path: `${SHOTS}/car-map-full.png` });
@@ -396,6 +417,16 @@ async function mockNetwork(context) {
         setAutoStart: (v) => window.__log.push(`autostart:${v}`),
         needsOverlayPermission: () => true,
         openSettings: (w) => window.__log.push(`settings:${w}`),
+        getBtMedia: () => 'null',
+        lanStart: (c) => window.__log.push(`lan:start:${c}`),
+        lanSend: (id, t) => window.__log.push(`lan:send:${id}:${JSON.parse(t).t}`),
+        lanClose: (id) => window.__log.push(`lan:close:${id}`),
+        lanStop: () => {},
+        btCmd: (c) => window.__log.push(`bt:${c}`),
+        btInfoAllowed: () => false,
+        allowBtInfo: () => window.__log.push('bt:info'),
+        bluetoothAppName: () => 'BT Music',
+        switchToBluetooth: () => { window.__log.push('bt:switch'); return true; },
       };
     }, `data:image/png;base64,${PNG.toString('base64')}`);
     await dash.addInitScript(() => {
@@ -437,8 +468,111 @@ async function mockNetwork(context) {
     await dash.waitForFunction(() => document.querySelector('#pair-url').textContent.startsWith('https://my-car.netlify.app/phone.html'));
     check(true, 'with a web address set, the QR code uses it (works for iPhones)');
     await dash.click('#set-autostart');
+
+    // Direct local-network link (stereo app's local server)
+    await dash.waitForFunction(() => window.__log.some((l) => l.startsWith('lan:start:')));
+    check(true, 'stereo app starts the local server with the pairing code');
+    await dash.evaluate(() => window.carautoNative.onEvent({ type: 'lan', ev: 'open', id: 7 }));
+    await dash.waitForFunction(() => window.__log.includes('lan:send:7:welcome'));
+    await dash.evaluate(() => window.carautoNative.onEvent({ type: 'lan', ev: 'msg', id: 7, data: JSON.stringify({ t: 'hello', name: 'Pixel', caps: { native: true } }) }));
+    await dash.waitForFunction(() => document.querySelector('#tile-link').textContent.includes('1 phone'));
+    check(true, 'phone connected over the local network is linked on the car');
+    await dash.evaluate(() => window.carautoNative.onEvent({ type: 'lan', ev: 'close', id: 7 }));
+    await dash.waitForFunction(() => !document.querySelector('#tile-link').textContent.includes('1 phone'));
+    check(true, 'local link disconnect is handled');
+
+    // Voice typing in the map search bar (native speech recognition)
+    await dash.evaluate(() => { window.CarAutoNative.startVoice = () => setTimeout(() => window.carautoNative.onEvent({ type: 'voice', final: 'take me to city airport' }), 50); });
+    await dash.click('.taskbar [data-view=home]');
+    await dash.click('#nav-search-mic');
+    await dash.waitForFunction(() => document.querySelector('#nav-search input').value === 'city airport');
+    await dash.waitForSelector('#nav-results .result');
+    check(true, 'map search mic: spoken place fills the search bar and shows results');
+    await dash.screenshot({ path: `${SHOTS}/dash-voice-search.png` });
+
+    // Suggestions while typing, without pressing search
+    await dash.fill('#nav-search input', '');
+    await dash.type('#nav-search input', 'Phoe', { delay: 40 });
+    await dash.waitForFunction(() => document.querySelector('#nav-results').textContent.includes('Phoe Mall'));
+    check(true, 'map search shows suggestions while typing');
+    await dash.screenshot({ path: `${SHOTS}/dash-suggest.png` });
+    await dash.evaluate(([lat, lon]) => window.carauto.ctx.nav.ingest({ lat, lon, speed: 0, acc: 5, time: Date.now() }, 'device'), [A[1], A[0]]);
+    await dash.click('#nav-results .result[data-i="0"]');
+    await dash.waitForSelector('#route-preview:not([hidden])');
+    check((await dash.textContent('#route-preview')).includes('Phoe Mall'), 'tapping a suggestion opens the route preview');
+    await dash.click('#route-preview [data-act=cancel]');
+
+    // Play via Bluetooth (stereo's Bluetooth app)
+    await dash.click('.taskbar [data-view=music]');
+    await dash.click('#music-tabs [data-tab=bt]');
+    await dash.waitForSelector('.bt-panel');
+    check((await dash.textContent('.bt-panel')).includes('BT Music') && await dash.isVisible('[data-bt=info]'), 'Bluetooth tab: switch button names the stereo BT app, offers song info');
+    await dash.click('[data-bt=switch]');
+    let dlog = await dash.evaluate(() => window.__log);
+    check(dlog.includes('bt:switch') && dlog.includes('bt:play'), 'Play via Bluetooth switches the stereo and starts the phone');
+    check((await dash.textContent('.music-side [data-np=title]')) === 'Bluetooth audio', 'now playing shows Bluetooth audio');
+    await dash.evaluate(() => window.carautoNative.onEvent({ type: 'btmedia', media: { title: 'BT Song', artist: 'BT Artist', app: 'BT Music', pkg: 'com.syu.bt', bluetooth: true, playing: true, duration: 240000, position: 1000, artKey: 'x', art: null } }));
+    await dash.waitForFunction(() => document.querySelector('.music-side [data-np=title]').textContent === 'BT Song');
+    check((await dash.textContent('.music-side [data-np=sub]')).includes('Bluetooth'), 'song info from the stereo Bluetooth app shown');
+    await dash.click('.music-side [data-media=next]');
+    await dash.click('.music-side [data-media=toggle]');
+    dlog = await dash.evaluate(() => window.__log);
+    check(dlog.includes('bt:next') && dlog.includes('bt:pause'), 'controls go to the phone over Bluetooth');
+    await dash.screenshot({ path: `${SHOTS}/dash-bluetooth.png` });
+    const btVoice = await dash.evaluate(async () => (await import('./js/car/voice.js')).parseCommand('play bluetooth').cmd);
+    check(btVoice === 'bluetooth', 'voice: "play bluetooth"');
     check((await dash.evaluate(() => window.__log)).includes('autostart:false'), 'auto-start toggle reaches the app');
     await dashCtx.close();
+
+    // Phone side: looks for the car on the local network first, then falls back to the internet
+    const lanPage = await context.newPage();
+    await lanPage.goto(`${BASE}/index.html?choose`);
+    const statuses = await lanPage.evaluate(async () => {
+      const { PhoneClient } = await import('./js/link.js');
+      const seen = [];
+      const asked = [];
+      const fake = { discoverCar: (c) => { asked.push(c); setTimeout(() => client.lanFound(''), 100); } };
+      const client = new PhoneClient('WAXR-QZDF', { transport: 'peer', lan: fake });
+      client.on('status', (s) => seen.push(s.message || s.state));
+      client.start();
+      await new Promise((r) => setTimeout(r, 700));
+      client.stop();
+      return { seen, asked };
+    });
+    check(statuses.asked[0] === 'WAXR-QZDF' && statuses.seen.some((m) => /nearby/i.test(m)) && statuses.seen.some((m) => /internet/i.test(m)),
+      `phone tries the local network, then the internet (${statuses.seen.join(' → ')})`);
+    const btRun = await lanPage.evaluate(async () => {
+      const { PhoneClient } = await import('./js/link.js');
+      const seen = [];
+      const sent = [];
+      const fake = {
+        discoverCar: () => setTimeout(() => client.lanFound(''), 50),
+        btConnect: () => setTimeout(() => client.btEvent({ ev: 'open', device: 'Car stereo' }), 50),
+        btSend: (t) => sent.push(JSON.parse(t).t),
+        btClose: () => {},
+      };
+      const client = new PhoneClient('WAXR-QZDF', { transport: 'peer', lan: fake, name: 'Phone' });
+      client.on('status', (s) => seen.push(s.message || s.state));
+      client.start();
+      await new Promise((r) => setTimeout(r, 400));
+      const via = client.via;
+      client.btEvent({ ev: 'msg', data: JSON.stringify({ t: 'welcome', carName: 'Car' }) });
+      client.stop();
+      return { seen, sent, via };
+    });
+    check(btRun.via === 'bluetooth' && btRun.sent.includes('hello') && btRun.seen.some((m) => /bluetooth/i.test(m)),
+      `falls back to Bluetooth when the hotspot isn't found (${btRun.seen.join(' → ')})`);
+    await lanPage.close();
+
+    // Fallback map for stereos without WebGL
+    const rasterCtx = await browser.newContext({ viewport: { width: 1280, height: 720 }, serviceWorkers: 'block' });
+    await mockNetwork(rasterCtx);
+    const raster = await rasterCtx.newPage();
+    raster.on('pageerror', (e) => errors.push(`raster: ${e.message}`));
+    await raster.goto(`${BASE}/car.html?transport=local&map=raster`);
+    await raster.waitForFunction(() => window.carauto?.ctx?.nav);
+    check(await raster.evaluate(() => window.carauto.ctx.nav.map.kind) === 'raster' && !(await raster.isVisible('#btn-compass')), 'raster fallback map works (no compass)');
+    await rasterCtx.close();
 
     // Unpaired phone view
     const fresh = await browser.newPage({ viewport: { width: 390, height: 844 } });
