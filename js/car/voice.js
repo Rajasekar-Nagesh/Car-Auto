@@ -13,6 +13,8 @@ export function parseCommand(text) {
   if (/^(answer|pick up|accept)( it| the call| call)?$/.test(t)) return { cmd: 'callAction', action: 'answer' };
   if (/^(decline|reject|ignore)( it| the call| call)?$/.test(t)) return { cmd: 'callAction', action: 'decline' };
   if (/^(hang up|end( the)? call)$/.test(t)) return { cmd: 'callAction', action: 'end' };
+  if (/^(read|play)( my| the)?( new| latest)? (messages|texts|notifications)$/.test(t)) return { cmd: 'readMessages' };
+  if ((m = t.match(/^(?:reply|respond|answer)(?: with| saying| that)? (.+)$/))) return { cmd: 'reply', text: m[1] };
   if ((m = t.match(/^(?:call|dial|phone|ring) (.+)$/))) return { cmd: 'call', who: m[1] };
   if (/^(pause|stop)( the)?( music| radio| playback)?$/.test(t)) return { cmd: 'pause' };
   if (/^(next|skip)( song| track| station)?$/.test(t)) return { cmd: 'next' };
@@ -66,6 +68,8 @@ export function createVoice(ctx) {
       case 'callAction': return ctx.calls.action(c.action);
       case 'androidAuto': return ctx.startAndroidAuto();
       case 'trip': return ctx.voice(ctx.vehicle.summary());
+      case 'readMessages': return ctx.messages.readLatest();
+      case 'reply': return ctx.messages.replyLatest(c.text);
       case 'openApp':
         if (!ctx.openStereoApp?.(c.name)) ctx.voice(`I couldn't find an app called ${c.name}.`);
         return;
@@ -94,9 +98,26 @@ export function createVoice(ctx) {
       toast(ev.error === 'no-match' ? "Didn't catch that" : ev.error === 'not-allowed' ? 'Microphone permission denied' : 'Voice recognition unavailable');
     } else if (ev.final != null) {
       finishNative();
-      if (ev.final) execute(ev.final);
+      handleFinal(ev.final || '');
     }
   });
+
+  // Dictation (message replies): the next recognised phrase goes to a callback.
+  let dictateCb = null;
+  function handleFinal(text) {
+    if (dictateCb) {
+      const cb = dictateCb;
+      dictateCb = null;
+      cb(text);
+    } else if (text) {
+      execute(text);
+    }
+  }
+  function dictate(cb) {
+    dictateCb = cb;
+    listen();
+    transcript.textContent = 'Speak your reply…';
+  }
 
   function listen() {
     if (native) {
@@ -135,7 +156,7 @@ export function createVoice(ctx) {
     rec.onend = () => {
       rec = null;
       close();
-      if (finalText) execute(finalText);
+      handleFinal(finalText);
     };
     try { rec.start(); } catch { rec = null; close(); }
   }
@@ -145,5 +166,5 @@ export function createVoice(ctx) {
     rec?.abort();
   });
 
-  return { listen, execute };
+  return { listen, execute, dictate };
 }

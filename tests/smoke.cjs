@@ -271,6 +271,11 @@ async function mockNetwork(context) {
         mediaCmd: (c) => window.__log.push(`media:${c}`),
         placeCall: (n) => window.__log.push(`call:${n}`),
         callAction: (a) => window.__log.push(`action:${a}`),
+        replyMessage: (id, text) => { window.__log.push(`reply:${id}:${text}`); return true; },
+        getSms: () => JSON.stringify([{ number: '+9198', name: 'Carol', text: 'Call me', date: now - 120000 }]),
+        sendSms: (n, t) => { window.__log.push(`sms:${n}:${t}`); return true; },
+        getMusic: () => JSON.stringify([{ id: 11, title: 'Local Song One', artist: 'Band', duration: 200000 }, { id: 12, title: 'Local Song Two', artist: '', duration: 180000 }]),
+        playMusic: (ids, i) => window.__log.push(`play:${ids}:${i}`),
         onStatus: () => {},
       };
     });
@@ -327,6 +332,42 @@ async function mockNetwork(context) {
     await car.click('#media-card [data-media=toggle]');
     await linkPage.waitForFunction(() => window.__log.includes('media:toggle'));
     check(await car.getAttribute('#media-card [data-media=toggle]', 'aria-label') === 'Pause', 'standard phone app: car play button toggles phone music');
+
+    // Messages from phone apps (WhatsApp, SMS…) with replies
+    await linkPage.evaluate(() => window.carautoNative.onEvent({ type: 'message', id: 'wa1', app: 'WhatsApp', from: 'Dave', text: 'Where are you?', canReply: true, time: Date.now() }));
+    await car.waitForSelector('#message-overlay:not([hidden])');
+    check((await car.textContent('#message-overlay .from')).includes('WhatsApp') && await car.isVisible('[data-hu=reply]'), 'WhatsApp message pops up on the car with Reply');
+    await car.waitForTimeout(250);
+    await car.screenshot({ path: `${SHOTS}/car-message.png` });
+    await car.click('[data-hu=reply]');
+    await car.waitForSelector('#reply-sheet:not([hidden])');
+    await car.screenshot({ path: `${SHOTS}/car-reply.png` });
+    await car.click('#reply-quick [data-q="0"]');
+    await linkPage.waitForFunction(() => window.__log.includes('reply:wa1:On my way'));
+    check(true, 'quick reply is sent through the phone app');
+    const replyCmd = await car.evaluate(async () => (await import('./js/car/voice.js')).parseCommand('reply I will be there in 5 minutes'));
+    check(replyCmd.cmd === 'reply' && replyCmd.text === 'i will be there in 5 minutes', 'voice: "reply …"');
+    await car.evaluate(() => window.carauto.ctx.voiceCmd.execute('reply see you soon'));
+    await linkPage.waitForFunction(() => window.__log.includes('reply:wa1:see you soon'));
+    check(true, 'voice reply goes to the latest message');
+    await car.click('.taskbar [data-view=messages]');
+    await car.click('#btn-load-sms');
+    await car.waitForFunction(() => document.querySelector('#message-list').textContent.includes('Carol'));
+    await car.click('.msg[data-sms="0"] [data-act=reply]');
+    await car.click('#reply-quick [data-q="1"]');
+    await linkPage.waitForFunction(() => window.__log.some((l) => l.startsWith('sms:+9198:')));
+    check(true, 'text messages listed from the phone and answered by SMS');
+    await car.goBack();
+
+    // The phone's own music library
+    await car.click('.rail [data-view=music]');
+    await car.click('#music-tabs [data-tab=phone]');
+    await car.waitForFunction(() => document.querySelector('#music-list').textContent.includes('Local Song Two'));
+    await car.click('#music-list .track[data-i="1"]');
+    await linkPage.waitForFunction(() => window.__log.includes('play:[11,12]:1'));
+    check(true, "car's Music app plays songs stored on the phone");
+    await car.screenshot({ path: `${SHOTS}/car-phone-library.png` });
+    await car.click('.rail [data-view=home]');
 
     // ---------------- Car-Auto Dash (Android stereo app) ----------------
     console.log('Car-Auto Dash (native stereo bridge, simulated)');

@@ -146,6 +146,7 @@
           <button data-tab="favorites">Favorites</button>
           <button data-tab="browse">Radio</button>
           <button data-tab="files">My files</button>
+          <button data-tab="phone" hidden>Phone</button>
         </div>
       </div>
       <div class="music-body">
@@ -239,7 +240,7 @@
     </section>
 
     <section class="app-view view-messages" id="view-messages" hidden>
-      <div class="app-bar"><h2>Notifications</h2><button class="btn" id="btn-clear-msgs">Clear all</button></div>
+      <div class="app-bar"><h2>Notifications</h2><div class="row"><button class="btn" id="btn-load-sms" hidden>Text messages</button><button class="btn" id="btn-clear-msgs">Clear all</button></div></div>
       <div id="message-list" class="list"></div>
     </section>
 
@@ -339,6 +340,7 @@
     <div class="hu-icon">💬</div>
     <div class="hu-body"><b class="from"></b><div class="body"></div></div>
     <button class="btn small" data-hu="read">Read</button>
+    <button class="btn small primary" data-hu="reply" hidden>Reply</button>
     <button class="icon-btn" data-hu="close" aria-label="Dismiss">✕</button>
   </div>
 
@@ -360,6 +362,16 @@
     <b id="call-bar-name"></b>
     <span id="call-timer" class="muted">0:00</span>
     <button class="call-btn decline small" data-call="end" aria-label="End call"><svg viewBox="0 0 24 24"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28a1 1 0 0 1-.71-.29L.29 13.08A1 1 0 0 1 0 12.37c0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.66c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48a1 1 0 0 1-.71.29c-.27 0-.52-.11-.7-.28a11.27 11.27 0 0 0-2.67-1.85 1 1 0 0 1-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg></button>
+  </div>
+
+  <!-- Reply to a message -->
+  <div id="reply-sheet" class="voice-sheet reply-sheet" hidden>
+    <div>Reply to <b id="reply-to"></b></div>
+    <div class="chips" id="reply-quick"></div>
+    <div class="row">
+      <button class="btn primary" id="reply-voice">🎤 Speak reply</button>
+      <button class="btn" id="reply-cancel">Cancel</button>
+    </div>
   </div>
 
   <!-- Voice -->

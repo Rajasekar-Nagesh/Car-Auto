@@ -249,10 +249,12 @@ class MainActivity : Activity() {
     )
     private val notificationPerms = if (Build.VERSION.SDK_INT >= 33) arrayOf(Manifest.permission.POST_NOTIFICATIONS) else emptyArray()
     private val nearbyPerms = if (Build.VERSION.SDK_INT >= 31) arrayOf(Manifest.permission.BLUETOOTH_CONNECT) else emptyArray()
+    private val smsPerms = arrayOf(Manifest.permission.READ_SMS, Manifest.permission.RECEIVE_SMS, Manifest.permission.SEND_SMS)
+    private val musicPerms = arrayOf(if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE)
 
     /** Everything except location, which is only needed for GPS sharing. */
     private val basicPermissions: Array<String>
-        get() = phonePerms + arrayOf(Manifest.permission.READ_CONTACTS, Manifest.permission.READ_CALL_LOG) + notificationPerms + nearbyPerms
+        get() = phonePerms + arrayOf(Manifest.permission.READ_CONTACTS, Manifest.permission.READ_CALL_LOG) + smsPerms + musicPerms + notificationPerms + nearbyPerms
 
     private fun hasAllPhonePermissions() = has(*basicPermissions)
 
@@ -277,12 +279,14 @@ class MainActivity : Activity() {
     private fun buildAccessList() {
         accessList.clear()
         accessList += Access(
-            "Notification access", "Song title, album art and caller names on the car screen",
+            "Notification access", "Messages (WhatsApp, SMS…), song title, album art and caller names on the car",
             { hasNotificationAccess() }, { openNotificationAccess() },
         )
         accessList += Access("Phone", "Incoming-call screen, answer and hang up from the car", { has(*phonePerms) }, { requestRuntime(*phonePerms) })
         accessList += Access("Contacts", "Names and the Contacts tab on the car", { has(Manifest.permission.READ_CONTACTS) }, { requestRuntime(Manifest.permission.READ_CONTACTS) })
         accessList += Access("Call logs", "The Recents tab on the car", { has(Manifest.permission.READ_CALL_LOG) }, { requestRuntime(Manifest.permission.READ_CALL_LOG) })
+        accessList += Access("SMS", "Read and reply to text messages from the car", { has(*smsPerms) }, { requestRuntime(*smsPerms) })
+        accessList += Access("Music and audio", "Play this phone's songs from the car's Music app", { has(*musicPerms) }, { requestRuntime(*musicPerms) })
         if (notificationPerms.isNotEmpty()) {
             accessList += Access("Notifications", "Shows \"Connected to car\" while linked", { has(*notificationPerms) }, { requestRuntime(*notificationPerms) })
         }

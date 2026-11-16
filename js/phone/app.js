@@ -25,8 +25,17 @@ window.carautoNative = {
     if (!client) return;
     if (ev.type === 'media') client.send({ t: 'phoneMedia', media: ev.media });
     else if (ev.type === 'call') client.send({ t: 'phoneCall', ...ev });
+    else if (ev.type === 'message') client.send({ t: 'phoneMsg', msg: ev });
   },
 };
+
+// Send a long list in small pages (data-channel messages must stay small).
+function sendPaged(type, items, size = 150) {
+  const pages = Math.max(1, Math.ceil(items.length / size));
+  for (let page = 0; page < pages; page++) {
+    client.send({ t: type, page, pages, items: items.slice(page * size, (page + 1) * size) });
+  }
+}
 
 function sendContacts() {
   const items = parseJson(native.getContacts(), []);
@@ -100,6 +109,11 @@ function onMessage(msg) {
       case 'pcallAction': native.callAction(msg.action); return;
       case 'getContacts': sendContacts(); return;
       case 'getRecents': client.send({ t: 'recents', items: parseJson(native.getRecents(), []) }); return;
+      case 'msgReply': client.send({ t: 'msgReplyResult', id: msg.id, ok: !!native.replyMessage?.(String(msg.id), String(msg.text || '')) }); return;
+      case 'getSms': client.send({ t: 'sms', items: parseJson(native.getSms?.() || '[]', []) }); return;
+      case 'smsSend': client.send({ t: 'msgReplyResult', id: msg.id, ok: !!native.sendSms?.(String(msg.number), String(msg.text || '')) }); return;
+      case 'getMusic': sendPaged('music', parseJson(native.getMusic?.() || '[]', [])); return;
+      case 'playMusic': native.playMusic?.(JSON.stringify(msg.ids || []), Number(msg.index) || 0); return;
       default: break;
     }
   }

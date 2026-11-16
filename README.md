@@ -19,6 +19,8 @@ It comes in two parts. Each one is available as an Android app (full experience)
 | **Music**: internet radio, favorites, files from the stereo or USB | — |
 | **Your phone's music on the car screen**: whatever plays in Spotify, YouTube Music, podcasts… with album art, progress and controls | Car-Auto Link |
 | **Incoming call screen** (Answer / Decline), in-call bar with timer and End | Car-Auto Link |
+| **Messages** from WhatsApp, SMS, Telegram… pop up on the car, read aloud; **reply** with quick replies or by voice | Car-Auto Link |
+| **Phone music library**: browse the songs stored on your phone from the car's Music app and play them | Car-Auto Link |
 | **Contacts and Recents** synced from the phone; tap to call | Car-Auto Link |
 | **Open any app installed on the stereo** from the app grid (Google Maps, Waze, Spotify, YouTube…) | Car-Auto Dash |
 | **Starts automatically** with the car, or set it as the stereo's **home screen** | Car-Auto Dash |
@@ -124,6 +126,8 @@ Every push also runs **Build Android apps**, and its run page has the two APKs u
 3. In Car-Auto Link, tap each **Allow** button:
    * **Notification access**: shows what's playing in other music apps and caller names.
    * **Phone, contacts & call log**: incoming call screen, answer/decline, contacts, recents.
+   * **SMS**: list and reply to text messages from the car.
+   * **Music and audio**: play the songs stored on your phone from the car.
    * **Keep running in the background**: stops Android from closing the link while you drive.
 4. Under **Start automatically**, choose your car stereo's Bluetooth name. From then on the link starts by itself when you get in the car and stops when you leave.
 
