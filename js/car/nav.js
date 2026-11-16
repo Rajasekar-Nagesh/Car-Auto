@@ -3,7 +3,7 @@
 
 import {
   $, store, toast, speak, fetchJSON, haversine, bearing, fmtDist, sayDist,
-  fmtDuration, fmtClock, escapeHtml, searchPlaces, openExternal,
+  fmtDuration, fmtClock, escapeHtml, searchPlaces, suggestPlaces, openExternal,
 } from '../common.js';
 import { createMapView } from './mapview.js';
 
@@ -545,9 +545,22 @@ export function createNav(ctx) {
 
   // ---- Search UI ----
 
+  function showRows(rows) {
+    el.results.hidden = false;
+    el.results.innerHTML = rows.map((r, i) => `
+        <button class="result" data-i="${i}">
+          <b>${escapeHtml(r.name)}</b>
+          <span class="muted">${escapeHtml(r.label)}</span>
+          ${pos ? `<span class="dist">${fmtDist(haversine(pos, r), settings.units)}</span>` : ''}
+        </button>`).join('');
+    el.results._rows = rows;
+  }
+
   async function runSearch(q) {
     q = q.trim();
     if (!q) return;
+    suggestCtrl?.abort();
+    clearTimeout(suggestTimer);
     el.results.hidden = false;
     el.results.innerHTML = '<div class="muted pad">Searching…</div>';
     try {
@@ -556,13 +569,7 @@ export function createNav(ctx) {
         el.results.innerHTML = '<div class="muted pad">No places found.</div>';
         return [];
       }
-      el.results.innerHTML = rows.map((r, i) => `
-        <button class="result" data-i="${i}">
-          <b>${escapeHtml(r.name)}</b>
-          <span class="muted">${escapeHtml(r.label)}</span>
-          ${pos ? `<span class="dist">${fmtDist(haversine(pos, r), settings.units)}</span>` : ''}
-        </button>`).join('');
-      el.results._rows = rows;
+      showRows(rows);
       return rows;
     } catch (e) {
       el.results.innerHTML = `<div class="bad pad">Search failed: ${escapeHtml(e.message)}</div>`;
@@ -584,6 +591,27 @@ export function createNav(ctx) {
     previewTo(r);
   });
   el.searchInput.addEventListener('focus', () => renderRecents());
+
+  // Suggestions while typing (after a short pause; stale requests cancelled).
+  let suggestTimer = 0;
+  let suggestCtrl = null;
+  el.searchInput.addEventListener('input', () => {
+    const q = el.searchInput.value.trim();
+    clearTimeout(suggestTimer);
+    suggestCtrl?.abort();
+    if (q.length < 2) { el.results.hidden = true; if (!q) renderRecents(); return; }
+    suggestTimer = setTimeout(async () => {
+      suggestCtrl = new AbortController();
+      try {
+        const rows = await suggestPlaces(q, pos, { signal: suggestCtrl.signal });
+        if (el.searchInput.value.trim() !== q) return; // typing moved on
+        if (rows.length) showRows(rows);
+        else { el.results.hidden = false; el.results.innerHTML = '<div class="muted pad">No suggestions — press Enter to search</div>'; }
+      } catch (e) {
+        if (e.name !== 'AbortError') el.results.hidden = true; // Enter still runs the full search
+      }
+    }, 280);
+  });
 
   function addRecent(place) {
     const list = store.get('recents', []).filter((p) => p.label !== place.label);

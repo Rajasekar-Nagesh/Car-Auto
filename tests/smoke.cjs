@@ -52,6 +52,13 @@ function check(cond, msg) {
 
 async function mockNetwork(context) {
   await context.route(/tile\.openstreetmap\.org/, (r) => r.fulfill({ body: PNG, contentType: 'image/png' }));
+  await context.route(/photon\.komoot\.io/, (r) => {
+    const q = new URL(r.request().url()).searchParams.get('q') || '';
+    r.fulfill({ json: { features: [
+      { properties: { name: `${q} Mall`, street: 'MG Road', city: 'Bengaluru', state: 'Karnataka', country: 'India' }, geometry: { coordinates: [C[0], C[1]] } },
+      { properties: { name: `${q} Park`, city: 'Bengaluru', country: 'India' }, geometry: { coordinates: [77.6, 12.97] } },
+    ] } });
+  });
   await context.route(/tiles\.openfreemap\.org/, (r) => r.fulfill({ json: { version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#e8eaed' } }] } }));
   await context.route(/nominatim\.openstreetmap\.org/, (r) => r.fulfill({ json: NOMINATIM }));
   await context.route(/router\.project-osrm\.org/, (r) => r.fulfill({ json: OSRM }));
@@ -466,6 +473,18 @@ async function mockNetwork(context) {
     await dash.waitForSelector('#nav-results .result');
     check(true, 'map search mic: spoken place fills the search bar and shows results');
     await dash.screenshot({ path: `${SHOTS}/dash-voice-search.png` });
+
+    // Suggestions while typing, without pressing search
+    await dash.fill('#nav-search input', '');
+    await dash.type('#nav-search input', 'Phoe', { delay: 40 });
+    await dash.waitForFunction(() => document.querySelector('#nav-results').textContent.includes('Phoe Mall'));
+    check(true, 'map search shows suggestions while typing');
+    await dash.screenshot({ path: `${SHOTS}/dash-suggest.png` });
+    await dash.evaluate(([lat, lon]) => window.carauto.ctx.nav.ingest({ lat, lon, speed: 0, acc: 5, time: Date.now() }, 'device'), [A[1], A[0]]);
+    await dash.click('#nav-results .result[data-i="0"]');
+    await dash.waitForSelector('#route-preview:not([hidden])');
+    check((await dash.textContent('#route-preview')).includes('Phoe Mall'), 'tapping a suggestion opens the route preview');
+    await dash.click('#route-preview [data-act=cancel]');
 
     // Play via Bluetooth (stereo's Bluetooth app)
     await dash.click('.taskbar [data-view=music]');

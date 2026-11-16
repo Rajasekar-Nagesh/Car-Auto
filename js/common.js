@@ -164,6 +164,32 @@ export function stripUrls(text) {
 
 // OpenStreetMap place search (Nominatim). Called only on explicit submit
 // to stay within its 1-request-per-second usage policy.
+// Search-as-you-type suggestions (Photon: OpenStreetMap search built for
+// autocomplete; Nominatim's rules don't allow per-keystroke searching).
+const suggestCache = new Map();
+export async function suggestPlaces(query, near, { signal } = {}) {
+  const q = query.trim();
+  const key = `${q}|${near ? `${near.lat.toFixed(2)},${near.lon.toFixed(2)}` : ''}`;
+  if (suggestCache.has(key)) return suggestCache.get(key);
+  const p = new URLSearchParams({ q, limit: '7' });
+  if (near) { p.set('lat', near.lat.toFixed(4)); p.set('lon', near.lon.toFixed(4)); }
+  const res = await fetch(`https://photon.komoot.io/api/?${p}`, { signal });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const j = await res.json();
+  const seen = new Set();
+  const rows = (j.features || []).map((f) => {
+    const a = f.properties || {};
+    const [lon, lat] = f.geometry?.coordinates || [];
+    const name = a.name || [a.housenumber, a.street].filter(Boolean).join(' ') || a.city || '';
+    const label = [a.name && a.street ? [a.housenumber, a.street].filter(Boolean).join(' ') : '', a.district || a.locality, a.city || a.county, a.state, a.country]
+      .filter((x, i, arr) => x && x !== name && arr.indexOf(x) === i).join(', ');
+    return { name, label: label || name, lat, lon };
+  }).filter((r) => r.name && Number.isFinite(r.lat) && !seen.has(`${r.name}|${r.label}`) && seen.add(`${r.name}|${r.label}`));
+  suggestCache.set(key, rows);
+  if (suggestCache.size > 100) suggestCache.delete(suggestCache.keys().next().value);
+  return rows;
+}
+
 export async function searchPlaces(query, near) {
   const coords = parseLocationText(query);
   if (coords) return [{ name: 'Dropped pin', label: `${coords.lat.toFixed(5)}, ${coords.lon.toFixed(5)}`, ...coords }];
