@@ -57,6 +57,21 @@ class DashBridge(private val activity: MainActivity, private val web: WebView) {
 
     private fun emitVoice(key: String, value: String) = emit(JSONObject().put("type", "voice").put(key, value))
 
+    /** Direct local-network link to Car-Auto Link on the phone (no internet needed). */
+    private val lan = LanServer(activity) { event -> emit(event) }
+
+    @JavascriptInterface
+    fun lanStart(code: String) = lan.start(code)
+
+    @JavascriptInterface
+    fun lanSend(id: Int, text: String) = lan.send(id, text)
+
+    @JavascriptInterface
+    fun lanClose(id: Int) = lan.close(id)
+
+    @JavascriptInterface
+    fun lanStop() = lan.stop()
+
     init {
         DashMedia.emit = { event -> emit(event) }
         DashMedia.start(activity)
@@ -303,6 +318,7 @@ class DashBridge(private val activity: MainActivity, private val web: WebView) {
     }
 
     fun release() {
+        lan.stop()
         recognizer?.destroy()
         session.release()
     }

@@ -85,6 +85,8 @@ class LinkService : Service() {
             setGeolocationEnabled(true)
             mediaPlaybackRequiresUserGesture = false
             allowFileAccess = false
+            // The direct link to the stereo is a plain ws:// connection on the local network.
+            mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
         }
         w.webViewClient = AssetWebClient(this)
         w.webChromeClient = object : WebChromeClient() {
@@ -176,6 +178,15 @@ class LinkService : Service() {
         @JavascriptInterface
         fun getRecents(): String = PhoneHub.recents(ctx).toString()
 
+        /** Look for the car on the local network; answers with a "lanFound" event. */
+        @JavascriptInterface
+        fun discoverCar(code: String) {
+            Thread {
+                val addr = LanFinder.find(code)
+                sendToPage(JSONObject().put("type", "lanFound").put("addr", addr ?: ""))
+            }.start()
+        }
+
         @JavascriptInterface
         fun replyMessage(id: String, text: String): Boolean = Messages.reply(ctx, id, text)
 
@@ -197,7 +208,7 @@ class LinkService : Service() {
         fun onStatus(state: String, message: String) {
             updateStatus(
                 when (state) {
-                    "connected" -> "Connected to your car"
+                    "connected" -> if (message == "direct") "Connected to your car (direct, no internet needed)" else "Connected to your car (over the internet)"
                     "connecting" -> "Connecting to car…"
                     else -> message.ifBlank { "Waiting for the car…" }
                 },

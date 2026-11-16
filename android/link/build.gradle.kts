@@ -23,8 +23,8 @@ android {
         applicationId = "app.carauto.link"
         minSdk = 26
         targetSdk = 34
-        versionCode = 6
-        versionName = "1.5"
+        versionCode = 7
+        versionName = "1.6"
     }
 
     signingConfigs {

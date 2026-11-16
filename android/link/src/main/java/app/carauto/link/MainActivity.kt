@@ -73,10 +73,23 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        LinkService.statusListener = { text -> runOnUiThread { status.text = text } }
-        status.text = if (LinkService.running) LinkService.status else "Not connected"
+        LinkService.statusListener = { text -> runOnUiThread { showStatus(text) } }
+        showStatus(if (LinkService.running) LinkService.status else "Not connected")
         refreshAccess()
         loadBluetoothDevices()
+    }
+
+    /** Green when connected, red for problems, grey otherwise. */
+    private fun showStatus(text: String) {
+        status.text = text
+        val lower = text.lowercase()
+        status.setTextColor(
+            when {
+                lower.startsWith("connected") -> Color.rgb(0x6d, 0xd5, 0x8c)
+                listOf("error", "not found", "couldn't", "no connection", "failed").any { lower.contains(it) } -> Color.rgb(0xf2, 0x8b, 0x82)
+                else -> Color.rgb(0x9a, 0xa0, 0xa6)
+            },
+        )
     }
 
     override fun onPause() {

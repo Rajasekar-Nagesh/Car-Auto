@@ -138,6 +138,9 @@ ctx.vehicle = vehicle;
 bus.on('notify', ({ from, text }) => showMessage(from, text, { silent: true }));
 
 // Steering-wheel / hardware media keys forwarded by the Android app.
+// Direct local-network connections from Car-Auto Link (stereo app's local server).
+bus.on('native:lan', (ev) => host?.lanEvent(ev));
+
 // Bluetooth audio info from the stereo's Bluetooth app (Car-Auto Dash).
 bus.on('native:btmedia', ({ media }) => music.setBtMedia(media));
 if (native?.getBtMedia) {
@@ -394,7 +397,7 @@ function pairHelpText() {
 
 function startLink() {
   host?.stop();
-  host = new CarHost(code, { transport: transportFromUrl(), server: settings.peerServer });
+  host = new CarHost(code, { transport: transportFromUrl(), server: settings.peerServer, lan: native });
   host.on('status', ({ state, message }) => {
     linkState = state;
     $('#pair-status').textContent = state === 'online' ? 'Online — ready for phones' : message || state;

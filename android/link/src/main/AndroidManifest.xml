@@ -46,7 +46,8 @@
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="Car-Auto Link"
-        android:theme="@android:style/Theme.Material">
+        android:theme="@android:style/Theme.Material"
+        android:usesCleartextTraffic="true">
 
         <!-- Download the QR scanner module with the app instead of on first use. -->
         <meta-data

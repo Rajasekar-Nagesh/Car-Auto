@@ -418,6 +418,10 @@ async function mockNetwork(context) {
         needsOverlayPermission: () => true,
         openSettings: (w) => window.__log.push(`settings:${w}`),
         getBtMedia: () => 'null',
+        lanStart: (c) => window.__log.push(`lan:start:${c}`),
+        lanSend: (id, t) => window.__log.push(`lan:send:${id}:${JSON.parse(t).t}`),
+        lanClose: (id) => window.__log.push(`lan:close:${id}`),
+        lanStop: () => {},
         btCmd: (c) => window.__log.push(`bt:${c}`),
         btInfoAllowed: () => false,
         allowBtInfo: () => window.__log.push('bt:info'),
@@ -465,6 +469,18 @@ async function mockNetwork(context) {
     check(true, 'with a web address set, the QR code uses it (works for iPhones)');
     await dash.click('#set-autostart');
 
+    // Direct local-network link (stereo app's local server)
+    await dash.waitForFunction(() => window.__log.some((l) => l.startsWith('lan:start:')));
+    check(true, 'stereo app starts the local server with the pairing code');
+    await dash.evaluate(() => window.carautoNative.onEvent({ type: 'lan', ev: 'open', id: 7 }));
+    await dash.waitForFunction(() => window.__log.includes('lan:send:7:welcome'));
+    await dash.evaluate(() => window.carautoNative.onEvent({ type: 'lan', ev: 'msg', id: 7, data: JSON.stringify({ t: 'hello', name: 'Pixel', caps: { native: true } }) }));
+    await dash.waitForFunction(() => document.querySelector('#tile-link').textContent.includes('1 phone'));
+    check(true, 'phone connected over the local network is linked on the car');
+    await dash.evaluate(() => window.carautoNative.onEvent({ type: 'lan', ev: 'close', id: 7 }));
+    await dash.waitForFunction(() => !document.querySelector('#tile-link').textContent.includes('1 phone'));
+    check(true, 'local link disconnect is handled');
+
     // Voice typing in the map search bar (native speech recognition)
     await dash.evaluate(() => { window.CarAutoNative.startVoice = () => setTimeout(() => window.carautoNative.onEvent({ type: 'voice', final: 'take me to city airport' }), 50); });
     await dash.click('.taskbar [data-view=home]');
@@ -507,6 +523,25 @@ async function mockNetwork(context) {
     check(btVoice === 'bluetooth', 'voice: "play bluetooth"');
     check((await dash.evaluate(() => window.__log)).includes('autostart:false'), 'auto-start toggle reaches the app');
     await dashCtx.close();
+
+    // Phone side: looks for the car on the local network first, then falls back to the internet
+    const lanPage = await context.newPage();
+    await lanPage.goto(`${BASE}/index.html?choose`);
+    const statuses = await lanPage.evaluate(async () => {
+      const { PhoneClient } = await import('./js/link.js');
+      const seen = [];
+      const asked = [];
+      const fake = { discoverCar: (c) => { asked.push(c); setTimeout(() => client.lanFound(''), 100); } };
+      const client = new PhoneClient('WAXR-QZDF', { transport: 'peer', lan: fake });
+      client.on('status', (s) => seen.push(s.message || s.state));
+      client.start();
+      await new Promise((r) => setTimeout(r, 700));
+      client.stop();
+      return { seen, asked };
+    });
+    check(statuses.asked[0] === 'WAXR-QZDF' && statuses.seen.some((m) => /nearby/i.test(m)) && statuses.seen.some((m) => /internet/i.test(m)),
+      `phone tries the local network, then the internet (${statuses.seen.join(' → ')})`);
+    await lanPage.close();
 
     // Fallback map for stereos without WebGL
     const rasterCtx = await browser.newContext({ viewport: { width: 1280, height: 720 }, serviceWorkers: 'block' });
