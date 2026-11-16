@@ -687,6 +687,11 @@ export function createNav(ctx) {
     map,
     navigateTo,
     searchAndGo,
+    // Show search results for a spoken or typed place (the driver picks one).
+    search(q) {
+      el.searchInput.value = q;
+      return runSearch(q);
+    },
     stop,
     getState,
     getPos: () => pos,

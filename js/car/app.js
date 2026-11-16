@@ -148,6 +148,16 @@ bus.on('native:media', ({ cmd }) => ({ play: music.resume, pause: music.pause, t
 bus.on('recents', () => home.refreshSuggestions());
 
 $('#btn-voice').addEventListener('click', () => voice.listen());
+
+// Voice typing in the map search bar.
+$('#nav-search-mic').addEventListener('click', () => {
+  voice.dictate((text) => {
+    if (!text) return toast("Didn't catch that. Try again.");
+    // "navigate to X" / "take me to X" → just the place name
+    const place = text.replace(/^(navigate|directions|take me|drive|go|get me)( me)? to /i, '').trim();
+    nav.search(place);
+  }, 'Where to? Say a place or address');
+});
 const setSpeedUnit = () => { $('#speed-unit').textContent = settings.units === 'mi' ? 'mph' : 'km/h'; };
 setSpeedUnit();
 

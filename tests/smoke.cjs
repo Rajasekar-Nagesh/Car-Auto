@@ -444,6 +444,15 @@ async function mockNetwork(context) {
     check(true, 'with a web address set, the QR code uses it (works for iPhones)');
     await dash.click('#set-autostart');
 
+    // Voice typing in the map search bar (native speech recognition)
+    await dash.evaluate(() => { window.CarAutoNative.startVoice = () => setTimeout(() => window.carautoNative.onEvent({ type: 'voice', final: 'take me to city airport' }), 50); });
+    await dash.click('.taskbar [data-view=home]');
+    await dash.click('#nav-search-mic');
+    await dash.waitForFunction(() => document.querySelector('#nav-search input').value === 'city airport');
+    await dash.waitForSelector('#nav-results .result');
+    check(true, 'map search mic: spoken place fills the search bar and shows results');
+    await dash.screenshot({ path: `${SHOTS}/dash-voice-search.png` });
+
     // Play via Bluetooth (stereo's Bluetooth app)
     await dash.click('.taskbar [data-view=music]');
     await dash.click('#music-tabs [data-tab=bt]');

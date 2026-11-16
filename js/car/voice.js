@@ -115,10 +115,10 @@ export function createVoice(ctx) {
       execute(text);
     }
   }
-  function dictate(cb) {
+  function dictate(cb, prompt = 'Speak your reply…') {
     dictateCb = cb;
     listen();
-    transcript.textContent = 'Speak your reply…';
+    transcript.textContent = prompt;
   }
 
   function listen() {
