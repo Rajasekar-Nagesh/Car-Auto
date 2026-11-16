@@ -50,6 +50,11 @@ class MainActivity : Activity() {
     }
 
     private val accessList = mutableListOf<Access>()
+    private lateinit var accessSummary: TextView
+    private lateinit var accessToggle: TextView
+    private lateinit var accessBox: LinearLayout
+    private lateinit var restrictedHelp: TextView
+    private var accessExpanded = false
     private lateinit var btSpinner: Spinner
     private lateinit var btHint: TextView
     private var btAddresses: List<String?> = emptyList()
@@ -195,7 +200,18 @@ class MainActivity : Activity() {
         root.addView(row)
 
         section("2. Allow access", root)
-        root.addView(text("Tap Allow on each line. ✓ means it's done.", 14f, color = muted))
+        // Collapsed to one line once everything is allowed.
+        accessSummary = text("", 15f, true).apply { setPadding(0, dp(2), 0, dp(2)) }
+        root.addView(accessSummary)
+        accessToggle = text("Show details", 14f, color = Color.rgb(0x8a, 0xb4, 0xf8)).apply {
+            setOnClickListener {
+                accessExpanded = !accessExpanded
+                refreshAccess()
+            }
+        }
+        root.addView(accessToggle)
+        accessBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(accessBox, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         buildAccessList()
         accessList.forEach { a ->
             val line = LinearLayout(this).apply {
@@ -210,13 +226,16 @@ class MainActivity : Activity() {
             line.addView(texts, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
             a.button = button("Allow") { a.request() }
             line.addView(a.button, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
-            root.addView(line, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+            accessBox.addView(line, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         }
-        root.addView(text(
-            "Notification access greyed out or \"restricted setting\"? Tap the button below, then ⋮ (top right) → Allow restricted settings, and try again.",
+        restrictedHelp = text(
+            "Greyed out or \"restricted setting\"? Open app settings → ⋮ (top right) → Allow restricted settings, then try again.",
             13f, color = muted,
-        ).apply { setPadding(0, dp(12), 0, 0) })
-        root.addView(button("Open app settings") { openAppSettings() }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+        ).apply {
+            setPadding(0, dp(8), 0, 0)
+            setOnClickListener { openAppSettings() }
+        }
+        accessBox.addView(restrictedHelp)
 
         section("3. Options", root)
         val gps = Switch(this).apply {
@@ -289,28 +308,29 @@ class MainActivity : Activity() {
         requestPermissions(missing.toTypedArray(), REQ_PHONE)
     }
 
+    private val callPerms: Array<String>
+        get() = phonePerms + arrayOf(Manifest.permission.READ_CONTACTS, Manifest.permission.READ_CALL_LOG) + smsPerms
+    private val devicePerms: Array<String>
+        get() = musicPerms + notificationPerms + nearbyPerms
+
     private fun buildAccessList() {
         accessList.clear()
         accessList += Access(
-            "Notification access", "Messages (WhatsApp, SMS…), song title, album art and caller names on the car",
+            "Calls, contacts & SMS", "Call screen, Contacts, Recents and text messages on the car",
+            { has(*callPerms) }, { requestRuntime(*callPerms) },
+        )
+        accessList += Access(
+            "Music, alerts & Bluetooth", "Phone's songs, the \"Connected\" status, Bluetooth link and auto-start",
+            { has(*devicePerms) }, { requestRuntime(*devicePerms) },
+        )
+        accessList += Access(
+            "Notification access", "Song names, album art and WhatsApp/SMS messages from other apps",
             { hasNotificationAccess() }, { openNotificationAccess() },
         )
-        accessList += Access("Phone", "Incoming-call screen, answer and hang up from the car", { has(*phonePerms) }, { requestRuntime(*phonePerms) })
-        accessList += Access("Contacts", "Names and the Contacts tab on the car", { has(Manifest.permission.READ_CONTACTS) }, { requestRuntime(Manifest.permission.READ_CONTACTS) })
-        accessList += Access("Call logs", "The Recents tab on the car", { has(Manifest.permission.READ_CALL_LOG) }, { requestRuntime(Manifest.permission.READ_CALL_LOG) })
-        accessList += Access("SMS", "Read and reply to text messages from the car", { has(*smsPerms) }, { requestRuntime(*smsPerms) })
-        accessList += Access("Music and audio", "Play this phone's songs from the car's Music app", { has(*musicPerms) }, { requestRuntime(*musicPerms) })
-        if (notificationPerms.isNotEmpty()) {
-            accessList += Access("Notifications", "Shows \"Connected to car\" while linked", { has(*notificationPerms) }, { requestRuntime(*notificationPerms) })
-        }
-        if (nearbyPerms.isNotEmpty()) {
-            accessList += Access("Nearby devices", "Start automatically with the car's Bluetooth", { has(*nearbyPerms) }, { requestRuntime(*nearbyPerms) })
-        }
         accessList += Access(
-            "Location (optional)", "Only to share this phone's GPS with the car",
-            { has(Manifest.permission.ACCESS_FINE_LOCATION) }, { requestRuntime(Manifest.permission.ACCESS_FINE_LOCATION) },
+            "Run in background", "Keeps the link alive while you drive",
+            { ignoresBatteryOptimizations() }, { requestBatteryExemption() },
         )
-        accessList += Access("Battery: unrestricted", "Keeps the link running while you drive", { ignoresBatteryOptimizations() }, { requestBatteryExemption() })
     }
 
     private fun openNotificationAccess() {
@@ -342,12 +362,21 @@ class MainActivity : Activity() {
     }
 
     private fun refreshAccess() {
+        var missing = 0
         accessList.forEach { a ->
             val ok = a.granted()
+            if (!ok) missing++
             a.title.text = if (ok) "✓  ${a.label}" else "✗  ${a.label}"
             a.title.setTextColor(if (ok) Color.rgb(0x6d, 0xd5, 0x8c) else Color.WHITE)
             a.button.visibility = if (ok) View.GONE else View.VISIBLE
         }
+        val allOk = missing == 0
+        accessSummary.text = if (allOk) "✓  All access allowed" else "$missing of ${accessList.size} still needed: tap Allow"
+        accessSummary.setTextColor(if (allOk) Color.rgb(0x6d, 0xd5, 0x8c) else Color.rgb(0xfd, 0xd6, 0x63))
+        accessBox.visibility = if (allOk && !accessExpanded) View.GONE else View.VISIBLE
+        accessToggle.visibility = if (allOk) View.VISIBLE else View.GONE
+        accessToggle.text = if (accessExpanded) "Hide details" else "Show details"
+        restrictedHelp.visibility = if (hasNotificationAccess()) View.GONE else View.VISIBLE
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
