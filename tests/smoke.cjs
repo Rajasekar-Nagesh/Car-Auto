@@ -446,6 +446,10 @@ async function mockNetwork(context) {
     check(await fresh.isVisible('#pair-form'), 'unpaired phone shows pairing form');
     await fresh.screenshot({ path: `${SHOTS}/phone-pair.png` });
 
+    // The offline cache must never serve APK downloads (stale versions).
+    const swSrc = require('fs').readFileSync(path.join(__dirname, '..', 'sw.js'), 'utf8');
+    check(/pathname\.includes\('\/apk\/'\)[\s\S]*return;/.test(swSrc), 'service worker skips APK downloads');
+
     const landing = await browser.newPage({ viewport: { width: 390, height: 844 } });
     await landing.goto(`${BASE}/index.html`);
     check(await landing.locator('.choice').count() === 2, 'landing page offers car / phone');
