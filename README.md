@@ -91,7 +91,7 @@ GitHub builds the APKs and hosts the web app for free:
 3. Open the **Actions** tab and wait for **Deploy to GitHub Pages** to finish. Then:
    * Web app: `https://<your-github-username>.github.io/<repo-name>/` (for example `https://rajasekar-nagesh.github.io/Car-Auto/`)
    * Stereo app: `…/apk/car-auto-dash.apk`
-   * Phone app: `…/apk/car-auto-link.apk` (standard) and `…/apk/car-auto-link-full.apk` (full, see below)
+   * Phone app: `…/apk/car-auto-link.apk`
 
 Every push also runs **Build Android apps**, and its run page has the two APKs under *Artifacts*.
 
@@ -114,12 +114,15 @@ Every push also runs **Build Android apps**, and its run page has the two APKs u
 
 1. On the phone, open `…/apk/car-auto-link.apk` and install it.
 
-   > **Two editions.** In India and some other countries, Google Play Protect blocks apps installed from a browser or file manager if they use *notification access*, which is what reading another app's song title needs. So there are two builds:
-   > * **Car-Auto Link** (`car-auto-link.apk`): installs normally. Calls, contacts, recents, Bluetooth auto-start, and **play/pause/skip** of your phone's music. No song title or album art.
-   > * **Car-Auto Link Full** (`car-auto-link-full.apk`): adds the song title, artist, album art and progress. Install it from a computer with USB debugging on: `adb install -r car-auto-link-full.apk`. Play Protect allows installs over USB. It installs over the standard edition and keeps your settings.
+   > **"App blocked to protect your device"?** In India and some other countries, Google Play Protect blocks apps installed from a browser or file manager if they use *notification access*. Car-Auto Link needs it to show the song playing on your phone. Install it one of these ways:
+   > 1. **Play Store → profile picture → Play Protect → ⚙ → turn off "Scan apps with Play Protect"**, install the APK from Files, then turn Play Protect back on.
+   > 2. **From a computer:** turn on USB debugging (Settings → About phone → tap Build number 7×, then Developer options), connect, and run `adb install -r car-auto-link.apk`. Installs over USB are always allowed.
+   > 3. **Phone only:** install *Shizuku* and *SAI* from the Play Store, start Shizuku with Wireless debugging, then install the APK with SAI using the Shizuku installer.
+   >
+   > If Android then says notification access is a **restricted setting**, open Settings → Apps → Car-Auto Link → ⋮ → **Allow restricted settings**.
 2. On the stereo, open **Settings → Pair your phone**. In Car-Auto Link tap **Scan QR code** and point it at the stereo screen. It connects straight away. You can also type the code and tap **Connect**.
 3. In Car-Auto Link, tap each **Allow** button:
-   * **Notification access** (Full edition only): shows what's playing in other music apps and caller names.
+   * **Notification access**: shows what's playing in other music apps and caller names.
    * **Phone, contacts & call log**: incoming call screen, answer/decline, contacts, recents.
    * **Keep running in the background**: stops Android from closing the link while you drive.
 4. Under **Start automatically**, choose your car stereo's Bluetooth name. From then on the link starts by itself when you get in the car and stops when you leave.
@@ -144,8 +147,8 @@ Tap the microphone in the taskbar (or press the steering-wheel voice button with
 ## Tips and troubleshooting
 
 * **Try it parked:** turn on **Settings → Demo drive**, then pick a destination.
-* **"App blocked to protect your device" (Play Protect):** that's the Full edition. Install the standard `car-auto-link.apk` instead, or install Full over USB with `adb install`.
-* **Phone music doesn't show:** the standard edition shows "Music on your phone" with controls only. For the song title, use the Full edition and check *Notification access* has a ✓.
+* **"App blocked to protect your device" (Play Protect):** see *Set up your phone* above for the three ways to install.
+* **Phone music doesn't show:** check that *Notification access* has a ✓ in Car-Auto Link. Until it's allowed, the car shows "Music on your phone" with play/pause/skip only.
 * **Calls don't show:** check *Phone, contacts & call log* has a ✓. Some phone brands also need Car-Auto Link set to "No restrictions" under battery settings.
 * **"Car not found":** Car-Auto Dash must be open on the stereo and show *Online — ready for phones* in Settings; both devices need internet.
 * **Auto-start doesn't happen:** many stereos sleep instead of shutting down when the car turns off, so they never "boot". Use **Use as home screen** instead.
