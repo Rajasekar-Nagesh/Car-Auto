@@ -35,6 +35,15 @@ jobs:
           mkdir -p apk
           cp android/dash/build/outputs/apk/release/dash-release.apk apk/car-auto-dash.apk
           cp android/link/build/outputs/apk/release/link-release.apk apk/car-auto-link.apk
+      - name: Check APKs (signature, Android versions)
+        run: |
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+          for f in apk/*.apk; do
+            echo "=== $f ($(stat -c %s $f) bytes)"
+            $BT/apksigner verify --verbose --print-certs "$f" | grep -E "Verified|Signer #1 certificate DN|WARNING|ERROR" || true
+            $BT/aapt2 dump badging "$f" | grep -E "^package:|sdkVersion|targetSdkVersion|native-code|application-label:" || true
+            $BT/aapt2 dump xmltree --file AndroidManifest.xml "$f" | grep -iE "testOnly|extractNativeLibs" || echo "no testOnly flag"
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: car-auto-apks

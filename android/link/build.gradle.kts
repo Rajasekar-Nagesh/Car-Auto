@@ -23,8 +23,8 @@ android {
         applicationId = "app.carauto.link"
         minSdk = 26
         targetSdk = 34
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = 3
+        versionName = "1.2"
     }
 
     signingConfigs {
@@ -35,6 +35,10 @@ android {
             storePassword = "carauto"
             keyAlias = "carauto"
             keyPassword = "carauto"
+            // Sign with every scheme for the widest phone/stereo compatibility.
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = true
         }
     }
 
