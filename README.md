@@ -86,7 +86,7 @@ How it works without a car connection: the stereo turns on with the ignition, so
 
 GitHub builds the APKs and hosts the web app for free:
 
-1. Merge this code into the `main` branch of your GitHub repository.
+1. Merge this code into your default branch (`Main` in this repository).
 2. On GitHub, open **Settings → Pages → Build and deployment → Source** and choose **GitHub Actions**.
 3. Open the **Actions** tab and wait for **Deploy to GitHub Pages** to finish. Then:
    * Web app: `https://<your-github-username>.github.io/<repo-name>/` (for example `https://rajasekar-nagesh.github.io/Car-Auto/`)
