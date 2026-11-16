@@ -196,6 +196,43 @@ async function mockNetwork(context) {
     await car.waitForSelector('#maneuver', { state: 'hidden' });
     check(true, 'arrival ends navigation');
 
+    // Vehicle trip computer
+    const before = await car.evaluate(() => window.carauto.ctx.vehicle._state().trip.dist);
+    await car.evaluate(() => {
+      // realistic drive: 30 fixes, 1 s apart, 14 m each (~50 km/h) + GPS jitter while parked
+      const t0 = Date.now() + 5000;
+      const bus = window.carauto.ctx.bus;
+      for (let i = 0; i <= 30; i++) bus.emit('pos', { lat: 12.98 + i * 14 / 110540, lon: 77.6, speed: 14, acc: 5, time: t0 + i * 1000 });
+      for (let i = 1; i <= 10; i++) bus.emit('pos', { lat: 12.98 + 420 / 110540 + (i % 2) * 0.00002, lon: 77.6, speed: 0, acc: 8, time: t0 + 31000 + i * 1000 });
+    });
+    const added = (await car.evaluate(() => window.carauto.ctx.vehicle._state().trip.dist)) - before;
+    check(added > 400 && added < 440, `trip distance from GPS, parked jitter ignored (+${Math.round(added)} m of 420)`);
+    check(/\d{1,2}:\d{2}/.test(await car.textContent('#veh-start')), 'home shows trip start time');
+    await car.click('#trip-card');
+    await car.waitForSelector('#view-vehicle:not([hidden])');
+    await car.fill('#odo-form [name=odo]', '45000');
+    await car.click('#odo-form button');
+    await car.fill('#fuel-form [name=litres]', '30');
+    await car.fill('#fuel-form [name=price]', '100');
+    await car.fill('#fuel-form [name=odo]', '44600');
+    await car.click('#fuel-form button');
+    await car.fill('#fuel-form [name=litres]', '25');
+    await car.fill('#fuel-form [name=price]', '102');
+    await car.fill('#fuel-form [name=odo]', '45000');
+    await car.click('#fuel-form button');
+    check((await car.textContent('#veh-mileage')).includes('16.0 km/l'), 'mileage from full-tank fill-ups (16.0 km/l)');
+    check((await car.textContent('#veh-totals')).includes('45,000'), 'odometer shown in totals');
+    await car.fill('#service-form [name=due]', '45300');
+    await car.click('#service-form button');
+    check((await car.textContent('#veh-service')).includes('300'), 'service reminder shows distance left');
+    check((await car.textContent('#veh-trip-stats')).includes('Fuel used'), 'trip fuel estimate shown');
+    await car.screenshot({ path: `${SHOTS}/car-vehicle.png` });
+    await car.goBack();
+    await car.waitForSelector('#view-vehicle', { state: 'hidden' });
+    check((await car.textContent('#veh-mileage-home')).includes('km/l'), 'home trip card shows mileage');
+    const tripCmd = await car.evaluate(async () => (await import('./js/car/voice.js')).parseCommand('how far have I driven').cmd);
+    check(tripCmd === 'trip', 'voice: "how far have I driven"');
+
     // Media + message from phone
     await phone.click('[data-media=next]');
     await phone.fill('#say-form textarea', 'Pick up milk');
@@ -217,6 +254,143 @@ async function mockNetwork(context) {
     await car.waitForTimeout(500);
     check(osrmCalls >= 1, 'driving off route triggers a reroute (not a false arrival)');
     check(await car.evaluate(() => window.carauto.ctx.nav.getState().active), 'navigation still active after going off route');
+
+    // ---------------- Car-Auto Link (Android phone app) ----------------
+    console.log('Car-Auto Link (native phone bridge, simulated)');
+    await phone.close(); // only one remote, like a real car
+    const linkPage = await context.newPage();
+    linkPage.on('pageerror', (e) => errors.push(`link: ${e.message}`));
+    await linkPage.addInitScript(() => {
+      window.__log = [];
+      const now = Date.now();
+      window.CarAutoLink = {
+        getMedia: () => JSON.stringify({ title: 'Song A', artist: 'Artist A', app: 'Spotify', playing: true, duration: 200000, position: 50000, positionAt: now, speed: 1, art: null, artKey: 'a' }),
+        getCall: () => JSON.stringify({ state: 'idle' }),
+        getContacts: () => JSON.stringify([{ name: 'Alice', number: '111', starred: true }, { name: 'Bob', number: '222', starred: false }]),
+        getRecents: () => JSON.stringify([{ name: 'Alice', number: '111', type: 'missed', date: now - 60000 }]),
+        mediaCmd: (c) => window.__log.push(`media:${c}`),
+        placeCall: (n) => window.__log.push(`call:${n}`),
+        callAction: (a) => window.__log.push(`action:${a}`),
+        onStatus: () => {},
+      };
+    });
+    await linkPage.goto(`${BASE}/phone.html?transport=local&native=1#pair=${code}`);
+    await car.waitForFunction(() => document.querySelector('#media-card [data-np=title]').textContent === 'Song A');
+    check((await car.textContent('#media-card [data-np=sub]')).includes('Spotify'), "car shows the phone's music (Spotify)");
+    check(await car.isVisible('#media-card [data-np=progress]'), 'progress bar for phone track');
+    await car.click('#media-card [data-media=toggle]');
+    await linkPage.waitForFunction(() => window.__log.includes('media:pause'));
+    check(true, 'car play/pause controls the phone app');
+    await car.click('#media-card [data-media=next]');
+    await linkPage.waitForFunction(() => window.__log.includes('media:next'));
+    check(true, 'car next-track controls the phone app');
+
+    await car.click('.rail [data-view=phone]');
+    await car.waitForFunction(() => document.querySelector('#contact-list').textContent.includes('Alice'));
+    check(true, 'starred phone contacts appear in Favorites');
+    await car.click('[data-ptab=recents]');
+    await car.waitForSelector('.row-call.missed');
+    check((await car.textContent('#synced-list')).includes('Alice'), 'recent calls synced from phone');
+    await car.click('[data-ptab=all]');
+    await car.waitForFunction(() => document.querySelector('#synced-list').textContent.includes('Bob'));
+    await car.screenshot({ path: `${SHOTS}/car-contacts.png` });
+    await car.click('#synced-list [data-num="222"]');
+    await linkPage.waitForFunction(() => window.__log.includes('call:222'));
+    check(true, 'tapping a contact places the call on the phone');
+    await car.click('.rail [data-view=home]');
+
+    await linkPage.evaluate(() => window.carautoNative.onEvent({ type: 'call', state: 'ringing', number: '222', name: 'Bob' }));
+    await car.waitForSelector('#call-overlay:not([hidden])');
+    check((await car.textContent('#call-name')) === 'Bob', 'incoming call screen shows the caller');
+    await car.waitForTimeout(200);
+    await car.screenshot({ path: `${SHOTS}/car-incoming-call.png` });
+    await car.click('[data-call=answer]');
+    await linkPage.waitForFunction(() => window.__log.includes('action:answer'));
+    check(true, 'Answer button answers on the phone');
+    await linkPage.evaluate(() => window.carautoNative.onEvent({ type: 'call', state: 'active', number: '222', name: 'Bob', since: Date.now() - 65000 }));
+    await car.waitForSelector('#call-bar:not([hidden])');
+    check(/1:0\d/.test(await car.textContent('#call-timer')), 'in-call bar shows the call timer');
+    await car.screenshot({ path: `${SHOTS}/car-in-call.png` });
+    await car.click('#call-bar [data-call=end]');
+    await linkPage.waitForFunction(() => window.__log.includes('action:end'));
+    await linkPage.evaluate(() => window.carautoNative.onEvent({ type: 'call', state: 'idle' }));
+    await car.waitForSelector('#call-bar', { state: 'hidden' });
+    check(true, 'hanging up clears the call bar');
+    await linkPage.evaluate(() => window.carautoNative.onEvent({ type: 'media', media: { title: 'Song B', artist: 'Artist B', app: 'YouTube Music', playing: true, duration: 0, position: 0, artKey: 'b' } }));
+    await car.waitForFunction(() => document.querySelector('#media-card [data-np=title]').textContent === 'Song B');
+    check(true, 'track changes on the phone update the car');
+    await car.screenshot({ path: `${SHOTS}/car-phone-media.png` });
+
+    // ---------------- Car-Auto Dash (Android stereo app) ----------------
+    console.log('Car-Auto Dash (native stereo bridge, simulated)');
+    const dashCtx = await browser.newContext({ viewport: { width: 1280, height: 720 }, serviceWorkers: 'block' });
+    await mockNetwork(dashCtx);
+    const dash = await dashCtx.newPage();
+    dash.on('pageerror', (e) => errors.push(`dash: ${e.message}`));
+    await dash.addInitScript((icon) => {
+      window.__log = [];
+      window.CarAutoNative = {
+        listApps: () => JSON.stringify([
+          { pkg: 'com.google.android.apps.maps', label: 'Maps', icon },
+          { pkg: 'com.spotify.music', label: 'Spotify', icon },
+          { pkg: 'com.waze', label: 'Waze', icon },
+        ]),
+        launchApp: (p) => { window.__log.push(`launch:${p}`); return true; },
+        openUrl: (u) => window.__log.push(`url:${u}`),
+        dial: (n) => window.__log.push(`dial:${n}`),
+        startVoice: () => setTimeout(() => {
+          window.carautoNative.onEvent({ type: 'voice', partial: 'open spo' });
+          window.carautoNative.onEvent({ type: 'voice', final: 'open spotify' });
+        }, 50),
+        stopVoice: () => {},
+        setMediaState: () => {},
+        getAutoStart: () => true,
+        setAutoStart: (v) => window.__log.push(`autostart:${v}`),
+        needsOverlayPermission: () => true,
+        openSettings: (w) => window.__log.push(`settings:${w}`),
+      };
+    }, `data:image/png;base64,${PNG.toString('base64')}`);
+    await dash.addInitScript(() => {
+      const now = Date.now();
+      // previous drive that ended 30 minutes ago (stereo was off since)
+      localStorage.setItem('carauto.trip', JSON.stringify({ start: now - 90 * 60000, lastSeen: now - 30 * 60000, dist: 12000, moving: 2400, idle: 600, maxSpeed: 20, lastFix: null }));
+    });
+    await dash.goto(`${BASE}/car.html?transport=local`);
+    await dash.waitForFunction(() => window.carauto?.ctx?.vehicle);
+    const st = await dash.evaluate(() => window.carauto.ctx.vehicle._state());
+    check(st.v.trips.length === 1 && st.v.trips[0].dist === 12000 && Date.now() - st.trip.start < 60000, 'stereo off >10 min starts a new trip and saves the old one');
+    await dash.click('.taskbar [data-view=apps]');
+    await dash.waitForSelector('#stereo-apps .launch');
+    check(await dash.locator('#stereo-apps .launch').count() === 3, 'app grid lists apps installed on the stereo');
+    await dash.waitForTimeout(200);
+    await dash.screenshot({ path: `${SHOTS}/dash-apps.png` });
+    await dash.click('#stereo-apps .launch:nth-child(3)');
+    check((await dash.evaluate(() => window.__log)).includes('launch:com.waze'), 'tapping an app launches it');
+    await dash.click('.taskbar [data-view=apps]');
+    await dash.click('[data-open=aa]');
+    check((await dash.evaluate(() => window.__log)).includes('launch:com.andrerinas.headunitrevived'), 'Android Auto tile opens Open Headunit');
+    const aaVoice = await dash.evaluate(async () => (await import('./js/car/voice.js')).parseCommand('Start Android Auto').cmd);
+    check(aaVoice === 'androidAuto', 'voice: "start Android Auto"');
+    check(await dash.evaluate(() => window.carauto.back()) === true, 'Back key closes the open app');
+    check(await dash.evaluate(() => window.carauto.back()) === false, 'Back on the dashboard is ignored (launcher stays)');
+    await dash.click('#btn-voice');
+    await dash.waitForFunction(() => window.__log.includes('launch:com.spotify.music'));
+    check(true, 'voice "open Spotify" launches the stereo app');
+    await dash.evaluate(() => window.carautoNative.onEvent({ type: 'media', cmd: 'next' }));
+    await dash.click('.taskbar [data-view=apps]');
+    await dash.click('[data-open=settings]');
+    check(await dash.isVisible('#native-card') && await dash.isVisible('#btn-overlay') && !(await dash.isVisible('#get-app-card')), 'native settings (auto-start, home screen) shown in the app');
+    await dash.waitForSelector('#pair-qr svg');
+    check((await dash.textContent('#pair-url')).startsWith('carauto://pair?code='), 'stereo app QR opens Car-Auto Link (carauto:// link)');
+    check((await dash.textContent('#pair-help')).includes('Scan QR code'), 'pairing help tells you to scan in Car-Auto Link');
+    await dash.fill('#set-webaddress', 'https://my-car.netlify.app');
+    await dash.press('#set-webaddress', 'Enter');
+    await dash.locator('#set-webaddress').blur();
+    await dash.waitForFunction(() => document.querySelector('#pair-url').textContent.startsWith('https://my-car.netlify.app/phone.html'));
+    check(true, 'with a web address set, the QR code uses it (works for iPhones)');
+    await dash.click('#set-autostart');
+    check((await dash.evaluate(() => window.__log)).includes('autostart:false'), 'auto-start toggle reaches the app');
+    await dashCtx.close();
 
     // Unpaired phone view
     const fresh = await browser.newPage({ viewport: { width: 390, height: 844 } });

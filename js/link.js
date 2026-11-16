@@ -199,12 +199,13 @@ export class CarHost extends Base {
 // Phone side
 // ---------------------------------------------------------------------------
 export class PhoneClient extends Base {
-  constructor(code, { transport = 'peer', server = null, name = 'Phone' } = {}) {
+  constructor(code, { transport = 'peer', server = null, name = 'Phone', caps = null } = {}) {
     super();
     this.code = code;
     this.transport = transport;
     this.server = server;
     this.name = name;
+    this.caps = caps;
     this.queue = [];
     this.connected = false;
     this.lastRx = 0;
@@ -243,7 +244,7 @@ export class PhoneClient extends Base {
     if (this.connected) this._rawSend(msg);
     else {
       // keep only the latest GPS fix / volume in the queue
-      if (msg.t === 'gps' || msg.t === 'media') this.queue = this.queue.filter((m) => m.t !== msg.t || (msg.t === 'media' && m.cmd !== msg.cmd));
+      if (['gps', 'media', 'phoneMedia', 'phoneCall'].includes(msg.t)) this.queue = this.queue.filter((m) => m.t !== msg.t || (msg.t === 'media' && m.cmd !== msg.cmd));
       this.queue.push(msg);
     }
   }
@@ -262,7 +263,7 @@ export class PhoneClient extends Base {
     this.backoff = 2000;
     this.lastRx = Date.now();
     this._status('connected');
-    this._rawSend({ t: 'hello', name: this.name });
+    this._rawSend({ t: 'hello', name: this.name, caps: this.caps });
     const q = this.queue;
     this.queue = [];
     q.forEach((m) => this._rawSend(m));
@@ -343,7 +344,7 @@ export class PhoneClient extends Base {
         this._receive(data.msg);
       };
     }
-    this.channel.postMessage({ to: 'car', from: this.id, msg: { t: 'hello', name: this.name } });
+    this.channel.postMessage({ to: 'car', from: this.id, msg: { t: 'hello', name: this.name, caps: this.caps } });
     this._scheduleRetry();
   }
 }

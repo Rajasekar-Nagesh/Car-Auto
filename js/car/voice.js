@@ -10,6 +10,9 @@ export function parseCommand(text) {
   if ((m = t.match(/^(?:navigate|directions|drive|take me|go|get me|route) (?:to )?(?:the )?(home|work)$/))) return { cmd: 'place', place: m[1] };
   if (/^(go|take me|drive|navigate) home$/.test(t)) return { cmd: 'place', place: 'home' };
   if ((m = t.match(/^(?:navigate to|directions to|take me to|drive to|go to|get me to|find|where is|show me) (.+)$/))) return { cmd: 'navigate', query: m[1] };
+  if (/^(answer|pick up|accept)( it| the call| call)?$/.test(t)) return { cmd: 'callAction', action: 'answer' };
+  if (/^(decline|reject|ignore)( it| the call| call)?$/.test(t)) return { cmd: 'callAction', action: 'decline' };
+  if (/^(hang up|end( the)? call)$/.test(t)) return { cmd: 'callAction', action: 'end' };
   if ((m = t.match(/^(?:call|dial|phone|ring) (.+)$/))) return { cmd: 'call', who: m[1] };
   if (/^(pause|stop)( the)?( music| radio| playback)?$/.test(t)) return { cmd: 'pause' };
   if (/^(next|skip)( song| track| station)?$/.test(t)) return { cmd: 'next' };
@@ -19,8 +22,11 @@ export function parseCommand(text) {
   if (/^(play|resume)( music| the music| radio| the radio)?$/.test(t)) return { cmd: 'play' };
   if ((m = t.match(/^play (.+?)(?: radio| station)?$/))) return { cmd: 'playSearch', query: m[1] };
   if (/what time is it|what's the time|tell me the time/.test(t)) return { cmd: 'time' };
+  if (/^(trip|vehicle)( info| status| summary| details)?$|how far (have i|did i) (driven|drive|gone)|what('s| is) my mileage|how long have i been driving/.test(t)) return { cmd: 'trip' };
   if (/how (long|far)|when (will|do) (we|i) arrive|eta/.test(t)) return { cmd: 'eta' };
-  if (/^(open |show )?(the )?(map|music|phone|home|settings)$/.test(t)) return { cmd: 'view', view: t.match(/(map|music|phone|home|settings)/)[1] };
+  if (/^(open |show )?(the )?(map|music|phone|home|settings|vehicle)$/.test(t)) return { cmd: 'view', view: t.match(/(map|music|phone|home|settings|vehicle)/)[1] };
+  if (/^(start|open|launch|connect)( to)? android auto$/.test(t)) return { cmd: 'androidAuto' };
+  if ((m = t.match(/^(?:open|launch|start) (.+)$/))) return { cmd: 'openApp', name: m[1] };
   return { cmd: 'unknown', text: t };
 }
 
@@ -57,6 +63,12 @@ export function createVoice(ctx) {
         return ctx.voice(`${s.remainingText} to go. You'll arrive at ${fmtClock(new Date(s.eta))}.`);
       }
       case 'view': return ctx.showView(c.view);
+      case 'callAction': return ctx.calls.action(c.action);
+      case 'androidAuto': return ctx.startAndroidAuto();
+      case 'trip': return ctx.voice(ctx.vehicle.summary());
+      case 'openApp':
+        if (!ctx.openStereoApp?.(c.name)) ctx.voice(`I couldn't find an app called ${c.name}.`);
+        return;
       default:
         ctx.voice("Sorry, I didn't get that. Try: navigate to, play, or call.");
     }
@@ -67,7 +79,36 @@ export function createVoice(ctx) {
     ctx.music.duck(false);
   }
 
+  // Android app on the stereo: native speech recognition.
+  const native = window.CarAutoNative?.startVoice ? window.CarAutoNative : null;
+  let nativeActive = false;
+  function finishNative() {
+    nativeActive = false;
+    close();
+  }
+  ctx.bus.on('native:voice', (ev) => {
+    if (!nativeActive) return;
+    if (ev.partial) transcript.textContent = ev.partial;
+    if (ev.error) {
+      finishNative();
+      toast(ev.error === 'no-match' ? "Didn't catch that" : ev.error === 'not-allowed' ? 'Microphone permission denied' : 'Voice recognition unavailable');
+    } else if (ev.final != null) {
+      finishNative();
+      if (ev.final) execute(ev.final);
+    }
+  });
+
   function listen() {
+    if (native) {
+      if (nativeActive) { native.stopVoice(); finishNative(); return; }
+      nativeActive = true;
+      speechSynthesis?.cancel();
+      ctx.music.duck(true);
+      overlay.hidden = false;
+      transcript.textContent = 'Listening…';
+      native.startVoice(navigator.language || 'en-US');
+      return;
+    }
     if (!SR) {
       toast('Voice commands are not supported in this browser. Use Chrome on Android.', 5000);
       return;
@@ -99,7 +140,10 @@ export function createVoice(ctx) {
     try { rec.start(); } catch { rec = null; close(); }
   }
 
-  overlay.addEventListener('click', () => rec?.abort());
+  overlay.addEventListener('click', () => {
+    if (nativeActive) { native.stopVoice(); finishNative(); }
+    rec?.abort();
+  });
 
   return { listen, execute };
 }

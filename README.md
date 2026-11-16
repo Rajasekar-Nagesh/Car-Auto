@@ -1,127 +1,176 @@
 # Car-Auto
 
-A free **Android Auto / Apple CarPlay alternative** for Android touchscreen car stereos that don't support either. It also includes a **phone remote** that works on Android and iPhone.
+A free **Android Auto / Apple CarPlay alternative** for Android touchscreen car stereos that don't support either.
 
-There's no app store and no account. It's one web app you install from the browser on each device.
+It comes in two parts. Each one is available as an Android app (full experience) or as a web app (works anywhere):
 
-| On the car stereo (**Car-Auto Dash**) | On your phone (**Car Remote**) |
+| | Android app (recommended) | Web app |
+|---|---|---|
+| **Car stereo** | **Car-Auto Dash** (`car-auto-dash.apk`) | `car.html` in Chrome |
+| **Phone** | **Car-Auto Link** (`car-auto-link.apk`), Android only | `phone.html` remote, Android and iPhone |
+
+### What you get
+
+| Feature | Needs |
 |---|---|
-| Home dashboard: clock, speed, weather, next turn, now playing, quick dial | Pair by scanning a QR code on the stereo |
-| **Maps** with turn-by-turn voice guidance, automatic rerouting, home/work, recent places | Send a destination to the car: search, paste a Google Maps link, or share from Maps (Android) |
-| **Music**: internet radio (thousands of stations), favorites, music files from the stereo or a USB drive | Control the car's music and volume |
-| **Phone**: dial pad and favorite contacts, calls go through the stereo's Bluetooth hands-free | See the next turn and arrival time |
-| **Voice commands**: "Navigate to…", "Play jazz radio", "Call Mom", "Go home" | Send a message that's shown and read aloud in the car |
-| Steering-wheel media buttons, day/night theme, works offline for recently seen map areas | **Share phone GPS** with the car if the stereo has no GPS or a weak signal |
+| Split-screen dashboard: live map, media card, weather, next turns, quick dial | — |
+| **Trip computer**: start time, running hours, trip distance, odometer, fuel mileage (km/l), service reminder, trip history | — |
+| **Maps** with turn-by-turn voice guidance, rerouting, Home/Work, recent places; hand off to **Google Maps** or **Waze** | — |
+| **Music**: internet radio, favorites, files from the stereo or USB | — |
+| **Your phone's music on the car screen**: whatever plays in Spotify, YouTube Music, podcasts… with album art, progress and controls | Car-Auto Link |
+| **Incoming call screen** (Answer / Decline), in-call bar with timer and End | Car-Auto Link |
+| **Contacts and Recents** synced from the phone; tap to call | Car-Auto Link |
+| **Open any app installed on the stereo** from the app grid (Google Maps, Waze, Spotify, YouTube…) | Car-Auto Dash |
+| **Starts automatically** with the car, or set it as the stereo's **home screen** | Car-Auto Dash |
+| Link starts automatically when the phone connects to the car's **Bluetooth** | Car-Auto Link |
+| Voice commands: "Navigate to…", "Play jazz radio", "Call Mom", "Answer", "Open Spotify" | — |
+| Send destinations and messages from the phone, share phone GPS | Either phone app |
+
+## Real Android Auto (optional, recommended)
+
+Car-Auto works together with **[Open Headunit](https://github.com/andreknieriem/open-headunit)**, a free open-source app that turns an Android stereo into a genuine **Android Auto receiver**. Your phone then projects real Android Auto onto the stereo: Google Maps, Waze, Spotify, WhatsApp, Assistant and calls, exactly like a factory unit.
+
+1. On the stereo, install Open Headunit from its [Releases page](https://github.com/andreknieriem/open-headunit/releases) (or Google Play).
+2. In Car-Auto, tap **Android Auto** in the app grid, or say **"Start Android Auto"**.
+3. Connect the phone by USB (the stereo needs a USB host port), or use one of Open Headunit's wireless options. Note: its README says wireless on Android Auto 17.4+ needs a USB dongle, root or its server mode.
+4. Press the stereo's Home button to come back to Car-Auto. This works best with Car-Auto set as the home screen.
+
+Open Headunit is a separate AGPL-3.0 project. Car-Auto only launches it and contains none of its code.
+
+When to use which: **Android Auto** gives you your phone's own apps on the screen. **Car-Auto** works without a USB connection, works with iPhones (web remote), and adds radio, local music, a launcher for the stereo's own apps, and auto-start.
 
 ## The car screen
 
-The layout follows the familiar phone-projection style:
-
 * **Taskbar** on the left: clock; Dashboard, Maps, Music and Phone; notifications, the app grid and the microphone. On portrait screens it moves to the bottom.
 * **Split-screen dashboard**: the live map on the left, with a media card and a context card on the right. The context card shows weather and suggested destinations, or your next turns while navigating.
-* **Full-screen apps**: Music (favorites, radio, your files), Phone (favorites and keypad), Notifications and Settings, plus an **app grid**. The stereo's **Back** button closes an app and returns to the dashboard.
-* Tap ⛶ on the map to go **full-screen map**. Messages from your phone drop down as **heads-up notifications**.
+* **Full-screen apps**: Music, Phone (Favorites, Recents, Contacts, Keypad), Notifications and Settings, plus an **app grid** that also lists the stereo's apps. The stereo's **Back** button returns to the dashboard.
+* Calls appear as a full-screen **incoming call** card. During a call, a green bar shows the caller and the timer, and the stereo's own radio is paused.
+
+### Trip computer (Vehicle)
+
+The home screen shows a trip strip: **Started · Running · Trip distance · Mileage**. Tap it, or open **Vehicle** in the app grid, for the full view:
+
+* **This trip:** start time, running time (moving and idling), distance, average and top speed, estimated fuel used and cost.
+* **Totals:** odometer, total running hours (like engine hours), today's distance and trips.
+* **Fuel & mileage:** log fill-ups (litres, price, odometer, full tank). Mileage is averaged between full-tank fill-ups, the most accurate method.
+* **Service reminder:** enter the odometer reading for your next service. You get a notification 500 km (300 mi) before it.
+* **Recent trips:** date, times, distance and duration of your last 20 drives.
+
+How it works without a car connection: the stereo turns on with the ignition, so a trip starts when Car-Auto opens or wakes after 10+ minutes off. Running time counts while the stereo is on. Distance comes from GPS, with parked jitter and GPS jumps filtered out. **Set your odometer once** (Vehicle → Odometer) so it matches your dashboard, then the app keeps adding to it. Say *"How far have I driven?"* or *"Trip info"* for a spoken summary.
+
+> Exact engine data (real engine hours, fuel level, RPM) needs an OBD-II Bluetooth adapter. That isn't supported yet.
 
 ### Built for speed
 
 * The map is created once and keeps running behind every app, so switching screens is instant.
-* The car marker glides smoothly between GPS fixes at the screen's refresh rate. Map lines are drawn on a canvas.
-* App files come from the offline cache straight away and update in the background. Measured with the CPU slowed 4× (like a budget stereo): first paint in about 0.2 s, then about 0.08 s on later launches. Opening an app takes about 35 ms.
-* The connection library and QR generator load only when needed, and weather loads after the screen appears.
-* Screens only redraw when something actually changes.
+* The car marker glides smoothly between GPS fixes. Map lines are drawn on a canvas.
+* With the CPU slowed 4× (like a budget stereo): first paint in about 0.2 s, about 0.08 s on later launches; opening an app takes about 35 ms. The Android apps load the files from inside the APK, so they don't wait on the network.
 
 ## How it works
 
 ```
- ┌──────────── Car stereo (Android) ────────────┐        ┌──── Phone (Android / iPhone) ────┐
- │ Car-Auto Dash  (Chrome, installed as an app) │◀──────▶│ Car Remote (browser, installed)  │
- │ maps · music · dialer · voice                │ WebRTC │ destinations · media · GPS · msg │
- └──────────────────────┬───────────────────────┘        └──────────────────────────────────┘
-                        │ Bluetooth (set up once in the stereo's own settings)
-                        └── call audio + phone media audio
+ ┌──────────── Car stereo ─────────────┐   WebRTC   ┌─────────────── Android phone ───────────────┐
+ │ Car-Auto Dash                       │◀──────────▶│ Car-Auto Link (runs in the background)      │
+ │ maps · music · phone · voice        │            │ reads media sessions, call state, contacts  │
+ │ opens stereo apps · auto-start      │            │ answers/ends calls, controls music apps     │
+ └────────────────┬────────────────────┘            └─────────────────────────────────────────────┘
+                  │ Bluetooth (paired once in the stereo's settings)
+                  └── call audio + phone music audio, as usual
 ```
 
-* The stereo and the phone connect directly over WebRTC. Pairing uses an 8-character code, which is inside the QR code. The free public PeerJS server is only used to introduce the two devices. You can run your own server instead (see *Advanced*).
-* Calls use the stereo's existing Bluetooth hands-free. Car-Auto opens the stereo's dialer with the number filled in.
-* Maps come from OpenStreetMap, routes from OSRM, place search from Nominatim, radio stations from radio-browser.info and weather from Open-Meteo. All of them are free and need no API keys.
+* The stereo and phone connect directly over WebRTC. Pairing uses an 8-character code. The free public PeerJS server only introduces the two devices; you can run your own (see *Advanced*). Both devices need internet: turn on your phone's hotspot and connect the stereo to it.
+* **Sound still travels over Bluetooth**, exactly as it does today. Car-Auto adds the screen, the controls and the call handling.
+* Maps from OpenStreetMap, routes from OSRM, search from Nominatim, radio from radio-browser.info, weather from Open-Meteo. All free, no API keys.
 
-## 1. Publish it (one time, about 5 minutes)
+## 1. Publish it (one time, about 10 minutes)
 
-GPS, the microphone and "Install app" only work over **HTTPS**. GitHub Pages hosts the app for free:
+GitHub builds the APKs and hosts the web app for free:
 
-1. Merge this code into the `main` branch of your GitHub repository.
+1. Merge this code into your default branch (`Main` in this repository).
 2. On GitHub, open **Settings → Pages → Build and deployment → Source** and choose **GitHub Actions**.
-3. Open the **Actions** tab. When the **Deploy to GitHub Pages** run finishes, your app is live at
-   `https://<your-github-username>.github.io/<repo-name>/` (for example `https://rajasekar-nagesh.github.io/Car-Auto/`).
+3. Open the **Actions** tab and wait for **Deploy to GitHub Pages** to finish. Then:
+   * Web app: `https://<your-github-username>.github.io/<repo-name>/` (for example `https://rajasekar-nagesh.github.io/Car-Auto/`)
+   * Stereo app: `…/apk/car-auto-dash.apk`
+   * Phone app: `…/apk/car-auto-link.apk`
+
+Every push also runs **Build Android apps**, and its run page has the two APKs under *Artifacts*.
 
 ## 2. Set up the car stereo
 
-1. Turn on your phone's **Wi-Fi hotspot** and connect the stereo to it, so the stereo has internet in the car.
-2. Pair your phone with the stereo over **Bluetooth** in the stereo's own settings (for calls and audio).
-3. Open **Chrome** on the stereo and go to your app address. Choose **"This is my car stereo"**.
-4. Allow **Location** (and **Microphone** when you first use voice).
-5. In Chrome's ⋮ menu tap **Install app** (or **Add to Home screen**). Car-Auto Dash now opens fullscreen from its icon.
-6. Open **Settings** in the app to set Home and Work, units (km or miles) and your car's name.
+1. Turn on your phone's **Wi-Fi hotspot** and connect the stereo to it.
+2. Pair your phone with the stereo over **Bluetooth** in the stereo's own settings (for call and music audio).
+3. In the stereo's browser, open `…/apk/car-auto-dash.apk` and install it. Android asks you to allow installing from the browser once.
+4. Open **Car-Auto Dash** and allow **Location**, **Microphone** and **Phone**.
+5. In **Settings → Car-Auto Dash app**:
+   * **Start automatically when the stereo turns on** (on by default). On Android 10+ also tap **Allow "display over other apps"**.
+   * Or tap **Use as home screen**, the most reliable way to have it open every time the car starts.
+6. Set Home and Work, units and your car's name.
 
-> If the stereo has no Chrome, install "Google Chrome" from its Play Store, or any up-to-date Chromium-based browser.
+> No APK? Open the web address in Chrome on the stereo, choose **"This is my car stereo"** and use ⋮ → **Install app**. Everything works except opening other apps and auto-start.
 
 ## 3. Set up your phone
 
-1. On the stereo, open **Settings → Pair your phone**.
-2. Scan the QR code with your **phone's camera**. It opens Car Remote, already paired.
-3. Install it:
-   * **iPhone (Safari):** Share button → **Add to Home Screen**.
-   * **Android (Chrome):** ⋮ → **Install app**. You can then share a place from Google Maps → **Car Remote**, and the car starts navigating.
+**Android: Car-Auto Link (music, calls, contacts)**
+
+1. On the phone, open `…/apk/car-auto-link.apk` and install it.
+2. On the stereo, open **Settings → Pair your phone**. In Car-Auto Link tap **Scan QR code** and point it at the stereo screen. It connects straight away. You can also type the code and tap **Connect**.
+3. In Car-Auto Link, tap each **Allow** button:
+   * **Notification access**: needed to see and control music from other apps and to show caller names.
+   * **Phone, contacts & call log**: incoming call screen, answer/decline, contacts, recents.
+   * **Keep running in the background**: stops Android from closing the link while you drive.
+4. Under **Start automatically**, choose your car stereo's Bluetooth name. From then on the link starts by itself when you get in the car and stops when you leave.
+
+**iPhone (or Android without the app):** this needs the web version hosted somewhere (GitHub Pages, Netlify…). If you use the stereo app, enter that address under **Settings → Advanced → Web address** so the QR code points to it. Then scan the QR code with the camera to open the web remote, then use Share → **Add to Home Screen**. It sends destinations and messages, controls the car's radio and shares GPS. Apple doesn't allow apps to read other apps' music or calls, so those features are Android only.
 
 ## Voice commands
 
-Tap the microphone in the side bar, then say:
+Tap the microphone in the taskbar (or press the steering-wheel voice button with the stereo app), then say:
 
 | Say | What happens |
 |---|---|
 | "Navigate to Phoenix Mall", "Take me to the airport" | Searches and starts navigation |
 | "Go home", "Navigate to work" | Starts navigation to a saved place |
-| "Stop navigation", "How long until we arrive?" | Ends the route / reads out time and distance left |
-| "Play jazz radio", "Play BBC", "Play music", "Pause", "Next" | Music control |
-| "Volume up", "Volume down" | Changes the app's volume |
-| "Call Mom", "Call 98765 43210" | Calls a favorite contact or a number |
+| "Stop navigation", "How long until we arrive?" | Ends the route / reads out time left |
+| "Play jazz radio", "Play music", "Pause", "Next" | Music control (also controls phone music) |
+| "Call Mom", "Call 98765 43210" | Calls a contact (phone contacts too) or a number |
+| "Answer", "Decline", "Hang up" | Handles the current call |
+| "Open Spotify", "Open Waze" | Opens an app on the stereo |
 | "What time is it?", "Open music" | Tells the time / switches screens |
-
-Voice recognition uses Chrome's speech service, so it needs internet.
 
 ## Tips and troubleshooting
 
-* **Try it without driving:** turn on **Settings → Demo drive**, then pick a destination. The car is moved along the route automatically.
-* **"Car not found" on the phone:** make sure Car-Auto Dash is open on the stereo and shows *Online — ready for phones* in Settings, and that both devices have internet.
-* **No GPS on the stereo:** on the phone, switch on **Share my GPS** and keep Car Remote open on screen. iPhones pause location sharing when the app is in the background.
-* **A radio station won't play:** some stations only stream over plain HTTP, which browsers block on HTTPS pages. Those are hidden from the list. Try another station.
-* **Music files** are read straight from the stereo or USB. Pick them again after restarting the app; nothing is uploaded.
-* **Steering-wheel buttons:** most Android stereos send media-key presses to the app that's playing, so next, previous and play/pause work while Car-Auto is playing.
-* **Keep the screen on** is enabled by default (Settings).
+* **Try it parked:** turn on **Settings → Demo drive**, then pick a destination.
+* **Phone music doesn't show:** in Car-Auto Link check that *Notification access* has a ✓, then start playing something on the phone.
+* **Calls don't show:** check *Phone, contacts & call log* has a ✓. Some phone brands also need Car-Auto Link set to "No restrictions" under battery settings.
+* **"Car not found":** Car-Auto Dash must be open on the stereo and show *Online — ready for phones* in Settings; both devices need internet.
+* **Auto-start doesn't happen:** many stereos sleep instead of shutting down when the car turns off, so they never "boot". Use **Use as home screen** instead.
+* **A radio station won't play:** stations that only stream over plain HTTP are hidden; try another.
+* **Steering-wheel buttons** go to whatever is playing (Car-Auto radio or your phone's music).
 
 ## Advanced
 
-* **Own pairing server:** run a [PeerJS server](https://github.com/peers/peerjs-server) (`npx peer --port 9000`) behind HTTPS and enter its URL in the car's *Settings → Advanced*. Phones that scan the new QR code use it too.
-* **Run locally:** `npm start`, then open http://localhost:8080. Add `?transport=local` to `car.html` and `phone.html` to try both screens in one browser without the internet pairing server.
-* **Tests:** `npm i -D playwright && npm test` runs an end-to-end test that drives the car screen and the phone remote together, with the map, search and radio services mocked.
+* **Own pairing server:** run a [PeerJS server](https://github.com/peers/peerjs-server) (`npx peer --port 9000`) behind HTTPS and enter its URL in *Settings → Advanced*. Phones pick it up from the QR code.
+* **Run locally:** `npm start`, then open http://localhost:8080. Add `?transport=local` to `car.html` and `phone.html` to try both screens in one browser.
+* **Tests:** `npm i -D playwright && npm test` drives the car screen, the web remote and simulated versions of both Android apps together, with map, search and radio services mocked.
+* **Build the APKs yourself:** install the Android SDK, then run `gradle -p android assembleRelease`. The APKs are signed with `android/carauto.keystore` (password `carauto`) so updates install over older versions. This key is public: make your own before publishing anywhere.
 
 ## Project layout
 
 ```
-index.html            start page: choose "car stereo" or "phone"
-car.html              car dashboard
-phone.html            phone remote
-js/common.js          shared helpers (storage, geo, formatting, search)
-js/link.js            phone ↔ car connection (WebRTC via PeerJS, heartbeats, reconnects)
-js/car/               dashboard modules: app, nav, music, phone, voice, home
-js/phone/app.js       remote
-sw.js                 offline cache (app files + recently seen map tiles)
-vendor/               Leaflet 1.9.4, PeerJS 1.5.4, qrcode-generator 1.4.4 (bundled, MIT/BSD)
+index.html, car.html, phone.html   start page, car dashboard, web remote
+js/common.js                       shared helpers (storage, geo, formatting, search)
+js/link.js                         phone ↔ car connection (WebRTC via PeerJS)
+js/car/                            dashboard: app, nav, music, phone, calls, voice, home
+js/phone/app.js                    remote (also runs inside Car-Auto Link)
+sw.js                              offline cache for the web version
+android/dash/                      Car-Auto Dash: stereo app (Kotlin)
+android/link/                      Car-Auto Link: phone app (Kotlin)
+vendor/                            Leaflet 1.9.4, PeerJS 1.5.4, qrcode-generator 1.4.4
 ```
 
 ## Safety
 
-Set your destination before you drive, or let a passenger use the phone remote. Use voice commands while driving, and always follow road signs and local laws over the app's directions.
+Set your destination before you drive, or let a passenger use the phone. Use voice commands while driving, and always follow road signs and local laws over the app's directions.
 
 ## License
 

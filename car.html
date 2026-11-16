@@ -20,6 +20,8 @@
   <link rel="modulepreload" href="js/car/home.js">
   <link rel="modulepreload" href="js/car/phone.js">
   <link rel="modulepreload" href="js/car/voice.js">
+  <link rel="modulepreload" href="js/car/calls.js">
+  <link rel="modulepreload" href="js/car/vehicle.js">
 </head>
 <body class="car">
   <!-- Taskbar -->
@@ -94,11 +96,18 @@
             <div class="art" data-np="art">📻</div>
             <div class="meta"><b data-np="title">Nothing playing</b><span data-np="sub">Tap to choose music</span></div>
           </div>
+          <div class="np-progress" data-np="progress" hidden><i></i></div>
           <div class="controls">
             <button class="ctl" data-media="prev" aria-label="Previous"><svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg></button>
             <button class="ctl main" data-media="toggle" aria-label="Play"></button>
             <button class="ctl" data-media="next" aria-label="Next"><svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6zM16 6v12h2V6z"/></svg></button>
           </div>
+        </div>
+        <div class="card trip-card" id="trip-card" role="button" tabindex="0" aria-label="Open trip details">
+          <div class="trip-stat"><span>Started</span><b id="veh-start">--:--</b></div>
+          <div class="trip-stat"><span>Running</span><b id="veh-running">0m</b></div>
+          <div class="trip-stat"><span>Trip</span><b id="veh-dist">0.0 km</b></div>
+          <div class="trip-stat"><span>Mileage</span><b id="veh-mileage-home">—</b></div>
         </div>
         <div class="card ctx-card" id="ctx-card">
           <div class="ctx-top">
@@ -115,6 +124,8 @@
     <!-- Full-screen apps -->
     <section class="app-view" id="view-apps" hidden>
       <div class="launcher">
+        <button class="launch" data-open="aa"><span class="ic ic-aa"><svg viewBox="0 0 24 24"><path d="M12 2 3 21l9-5 9 5z"/></svg></span>Android Auto</button>
+        <button class="launch" data-open="vehicle"><span class="ic ic-vehicle"><svg viewBox="0 0 24 24"><path d="M12 4a10 10 0 0 0-8.66 15h17.32A10 10 0 0 0 12 4zm0 2a8 8 0 0 1 7.4 11H4.6A8 8 0 0 1 12 6zm4.24 2.76-4.95 3.54a1.5 1.5 0 1 0 1.41 1.41z"/></svg></span>Vehicle</button>
         <button class="launch" data-open="map"><span class="ic ic-maps"><svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg></span>Maps</button>
         <button class="launch" data-open="music"><span class="ic ic-music"><svg viewBox="0 0 24 24"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3z"/></svg></span>Music</button>
         <button class="launch" data-open="radio"><span class="ic ic-radio"><svg viewBox="0 0 24 24"><path d="M3.24 6.15A2 2 0 0 0 2 8v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2H8.3l8.26-3.34L15.88 1zM7 20a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm13-8h-2v-2h-2v2H4V8h16z"/></svg></span>Radio</button>
@@ -124,6 +135,9 @@
         <button class="launch" data-open="settings"><span class="ic ic-settings"><svg viewBox="0 0 24 24"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3h-4l-.4 2.9a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L4.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1L9 21h4l.4-2.9a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5zM11 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(1 0)"/></svg></span>Settings</button>
         <button class="launch" data-open="fullscreen"><span class="ic ic-full"><svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7zm-2-4h2V7h3V5H5zm12 7h-3v2h5v-5h-2zM14 5v2h3v3h2V5z"/></svg></span>Full screen</button>
       </div>
+      <h3 class="launcher-head" id="stereo-apps-head">Apps on this stereo</h3>
+      <div class="launcher" id="stereo-apps"></div>
+      <p class="muted small launcher-hint" id="stereo-apps-hint"></p>
     </section>
 
     <section class="app-view view-music" id="view-music" hidden>
@@ -139,6 +153,7 @@
           <div class="art big-art" data-np="art">📻</div>
           <b class="np-title" data-np="title">Nothing playing</b>
           <span class="muted" data-np="sub"></span>
+          <div class="np-progress" data-np="progress" hidden><i></i></div>
           <div class="controls">
             <button class="ctl" data-media="prev" aria-label="Previous"><svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg></button>
             <button class="ctl main" data-media="toggle" aria-label="Play"></button>
@@ -161,8 +176,11 @@
       <div class="app-bar">
         <div class="tabs" id="phone-tabs">
           <button data-ptab="contacts" class="active">Favorites</button>
+          <button data-ptab="recents">Recents</button>
+          <button data-ptab="all">Contacts</button>
           <button data-ptab="keypad">Keypad</button>
         </div>
+        <input id="contact-search" class="search-input" type="search" placeholder="Search contacts" aria-label="Search contacts" hidden>
       </div>
       <div class="phone-body" data-ptab-show="contacts">
         <div class="contacts">
@@ -172,7 +190,10 @@
             <input name="number" type="tel" placeholder="Number" required aria-label="Phone number">
             <button class="btn primary" type="submit">Add</button>
           </form>
-          <p class="muted small">Calls use the stereo's Bluetooth hands-free. Pair your phone with the stereo over Bluetooth first.</p>
+        </div>
+        <div class="synced">
+          <div id="sync-hint" class="empty muted">Install the <b>Car-Auto Link</b> app on your Android phone to see its contacts and recent calls here, answer calls, and control its music.</div>
+          <div id="synced-list" class="list"></div>
         </div>
         <div class="dialer">
           <div id="dial-display" class="dial-display">Enter number</div>
@@ -189,6 +210,34 @@
       </div>
     </section>
 
+    <section class="app-view view-vehicle" id="view-vehicle" hidden>
+      <div class="app-bar"><h2>Vehicle</h2><button class="btn" id="veh-new-trip">Start new trip</button></div>
+      <div class="veh-grid">
+        <div class="card veh-wide"><h3>This trip</h3><div class="stat-grid" id="veh-trip-stats"></div></div>
+        <div class="card"><h3>Totals</h3><div class="stat-grid two" id="veh-totals"></div></div>
+        <div class="card">
+          <h3>Odometer &amp; service</h3>
+          <form id="odo-form" class="row"><input name="odo" type="number" inputmode="decimal" step="0.1" min="0" placeholder="Current odometer reading" aria-label="Odometer reading"><button class="btn" type="submit">Set</button></form>
+          <form id="service-form" class="row"><input name="due" type="number" inputmode="numeric" step="1" min="0" placeholder="Next service at (odometer)" aria-label="Next service odometer"><button class="btn" type="submit">Save</button></form>
+          <p id="veh-service" class="muted"></p>
+        </div>
+        <div class="card">
+          <h3>Fuel &amp; mileage</h3>
+          <div id="veh-mileage" class="big-stat"></div>
+          <form id="fuel-form" class="fuel-form" autocomplete="off">
+            <input name="litres" type="number" inputmode="decimal" step="0.01" min="0" placeholder="Litres" required aria-label="Litres">
+            <input name="price" type="number" inputmode="decimal" step="0.01" min="0" placeholder="Price per litre" aria-label="Price per litre">
+            <input name="odo" type="number" inputmode="decimal" step="0.1" min="0" placeholder="Odometer" aria-label="Odometer at fill-up">
+            <label class="switch"><input type="checkbox" name="full" checked> Full tank</label>
+            <button class="btn primary" type="submit">Add fill-up</button>
+          </form>
+          <div id="fuel-list" class="mini-list"></div>
+        </div>
+        <div class="card veh-wide"><h3>Recent trips</h3><div id="trip-history" class="mini-list"></div></div>
+      </div>
+      <p class="muted small pad">A trip starts when the stereo turns on (or wakes after 10+ minutes off). Distance comes from GPS; set your odometer once to keep it in step with the car.</p>
+    </section>
+
     <section class="app-view view-messages" id="view-messages" hidden>
       <div class="app-bar"><h2>Notifications</h2><button class="btn" id="btn-clear-msgs">Clear all</button></div>
       <div id="message-list" class="list"></div>
@@ -202,7 +251,7 @@
           <div class="pair">
             <div id="pair-qr" class="qr"></div>
             <div>
-              <p>Scan with your phone camera (Android or iPhone) to open the Car-Auto remote.</p>
+              <p id="pair-help">Scan with your phone camera (Android or iPhone) to open the Car-Auto remote.</p>
               <p class="muted">Or enter this code in the remote:</p>
               <div class="pair-code" id="pair-code">----</div>
               <p id="pair-status" class="muted">Starting…</p>
@@ -251,8 +300,29 @@
           </div>
         </div>
 
+        <div class="card" id="native-card" hidden>
+          <h3>Car-Auto Dash app</h3>
+          <label class="switch"><input type="checkbox" id="set-autostart"> Start automatically when the stereo turns on</label>
+          <div class="row wrap">
+            <button class="btn" id="btn-overlay" hidden>Allow "display over other apps"</button>
+            <button class="btn" id="btn-home">Use as home screen</button>
+          </div>
+          <p class="muted small">Auto-start needs "display over other apps" on Android 10+. Setting Car-Auto as the home screen makes the stereo open it after every start-up and when you press Home.</p>
+        </div>
+
+        <div class="card" id="get-app-card">
+          <h3>Android apps</h3>
+          <p class="muted">For the full experience install the free Android apps:</p>
+          <p><b>On this stereo:</b> <a href="apk/car-auto-dash.apk">Car-Auto Dash</a> — opens any app on the stereo, voice, auto-start.</p>
+          <p><b>On your Android phone:</b> <a href="apk/car-auto-link.apk">Car-Auto Link</a> — phone music, calls and contacts on the car screen.</p>
+        </div>
+
         <div class="card">
           <h3>Advanced</h3>
+          <label class="field">Web address (optional)
+            <input id="set-webaddress" placeholder="https://your-site.netlify.app/" inputmode="url">
+          </label>
+          <p class="muted small">Where the web version is hosted (GitHub Pages, Netlify…). The pairing QR code then works for iPhones too.</p>
           <label class="field">Own pairing server (optional)
             <input id="set-server" placeholder="https://your-peerjs-server:443/" inputmode="url">
           </label>
@@ -270,6 +340,26 @@
     <div class="hu-body"><b class="from"></b><div class="body"></div></div>
     <button class="btn small" data-hu="read">Read</button>
     <button class="icon-btn" data-hu="close" aria-label="Dismiss">✕</button>
+  </div>
+
+  <!-- Incoming call -->
+  <div id="call-overlay" class="call-overlay" hidden>
+    <div class="call-card">
+      <span class="avatar call-avatar" id="call-avatar"></span>
+      <div class="muted">Incoming call</div>
+      <div class="call-name" id="call-name"></div>
+      <div class="muted" id="call-number"></div>
+      <div class="call-actions">
+        <button class="call-btn decline" data-call="decline" aria-label="Decline"><svg viewBox="0 0 24 24"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28a1 1 0 0 1-.71-.29L.29 13.08A1 1 0 0 1 0 12.37c0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.66c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48a1 1 0 0 1-.71.29c-.27 0-.52-.11-.7-.28a11.27 11.27 0 0 0-2.67-1.85 1 1 0 0 1-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg></button>
+        <button class="call-btn answer" data-call="answer" aria-label="Answer"><svg viewBox="0 0 24 24"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z"/></svg></button>
+      </div>
+    </div>
+  </div>
+  <div id="call-bar" class="call-bar" hidden>
+    <span class="call-dot"></span>
+    <b id="call-bar-name"></b>
+    <span id="call-timer" class="muted">0:00</span>
+    <button class="call-btn decline small" data-call="end" aria-label="End call"><svg viewBox="0 0 24 24"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28a1 1 0 0 1-.71-.29L.29 13.08A1 1 0 0 1 0 12.37c0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.66c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48a1 1 0 0 1-.71.29c-.27 0-.52-.11-.7-.28a11.27 11.27 0 0 0-2.67-1.85 1 1 0 0 1-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg></button>
   </div>
 
   <!-- Voice -->

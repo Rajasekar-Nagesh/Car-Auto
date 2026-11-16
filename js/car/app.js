@@ -3,7 +3,7 @@
 
 import {
   $, $$, store, toast, speak, fmtSpeed, genPairCode, keepAwake,
-  registerServiceWorker, searchPlaces, escapeHtml, debounce, fmtClock,
+  registerServiceWorker, searchPlaces, escapeHtml, debounce, fmtClock, openExternal,
 } from '../common.js';
 import { CarHost, transportFromUrl, loadScript } from '../link.js';
 import { createNav } from './nav.js';
@@ -11,6 +11,13 @@ import { createMusic } from './music.js';
 import { createPhone } from './phone.js';
 import { createVoice } from './voice.js';
 import { createHome } from './home.js';
+import { createCalls } from './calls.js';
+import { createVehicle } from './vehicle.js';
+
+// The Car-Auto Dash Android app (stereo) exposes window.CarAutoNative and
+// delivers events (media keys, voice results) through this hook.
+const native = window.CarAutoNative || null;
+window.carautoNative = { onEvent: (ev) => { try { bus.emit(`native:${ev.type}`, ev); } catch (e) { console.error(e); } } };
 
 const DEFAULTS = {
   carName: 'My Car',
@@ -23,6 +30,7 @@ const DEFAULTS = {
   home: null,
   work: null,
   peerServer: null,
+  webAddress: '',
 };
 
 const settings = { ...DEFAULTS, ...store.get('settings', {}) };
@@ -71,6 +79,8 @@ function showView(name, { fromHistory = false } = {}) {
   if (name === 'music') music?.onShow();
   if (name === 'settings') renderPairing();
   if (name === 'messages') renderMessages();
+  if (name === 'apps') renderStereoApps();
+  if (name === 'vehicle') vehicle?.onShow();
   // Android back button / gesture closes apps and returns to the dashboard.
   if (!fromHistory) {
     if (!isDash && !wasApp) history.pushState({ app: name }, '');
@@ -105,6 +115,13 @@ setInterval(applyTheme, 5 * 60000);
 
 // ---- Modules ----
 
+// Native phone link (Car-Auto Link app on an Android phone).
+let nativeLinkId = null;
+ctx.phoneLink = {
+  available: () => !!nativeLinkId && !!host?.clients.has(nativeLinkId),
+  send: (m) => host?.clients.get(nativeLinkId)?.send(m),
+};
+
 const home = createHome(ctx);
 const phone = createPhone(ctx);
 ctx.phone = phone;
@@ -114,6 +131,14 @@ nav = createNav(ctx);
 ctx.nav = nav;
 const voice = createVoice(ctx);
 ctx.voiceCmd = voice;
+const calls = createCalls(ctx);
+ctx.calls = calls;
+const vehicle = createVehicle(ctx);
+ctx.vehicle = vehicle;
+bus.on('notify', ({ from, text }) => showMessage(from, text, { silent: true }));
+
+// Steering-wheel / hardware media keys forwarded by the Android app.
+bus.on('native:media', ({ cmd }) => ({ play: music.resume, pause: music.pause, toggle: music.toggle, next: music.next, prev: music.prev }[cmd])?.());
 bus.on('recents', () => home.refreshSuggestions());
 
 $('#btn-voice').addEventListener('click', () => voice.listen());
@@ -128,15 +153,65 @@ $('#view-apps').addEventListener('click', (e) => {
   if (open === 'voice') { showView('home'); voice.listen(); return; }
   if (open === 'fullscreen') { toggleFullscreen(); return; }
   if (open === 'radio') { showView('music'); music.openTab('browse'); return; }
+  if (open === 'aa') { startAndroidAuto(); return; }
   showView(open);
 });
 
-// ---- Phone app tabs ----
+// Real Android Auto projection is provided by the free Open Headunit app
+// (github.com/andreknieriem/open-headunit), launched as a separate app.
+const AA_PKG = 'com.andrerinas.headunitrevived';
+const AA_DOWNLOAD = 'https://github.com/andreknieriem/open-headunit/releases';
+function startAndroidAuto() {
+  if (native?.launchApp && native.launchApp(AA_PKG)) {
+    toast('Starting Android Auto… connect your phone by USB or wireless');
+    return true;
+  }
+  ctx.voice('To use Android Auto, install the Open Headunit app on this stereo.');
+  toast('Install the free Open Headunit app on this stereo for real Android Auto', 6000);
+  openExternal(AA_DOWNLOAD);
+  return false;
+}
+ctx.startAndroidAuto = startAndroidAuto;
 
-$$('#phone-tabs [data-ptab]').forEach((b) => b.addEventListener('click', () => {
-  $$('#phone-tabs [data-ptab]').forEach((x) => x.classList.toggle('active', x === b));
-  $('.phone-body').dataset.ptabShow = b.dataset.ptab;
-}));
+// Apps installed on the stereo (Android app) or quick links (browser).
+const WEB_APPS = [
+  { label: 'Google Maps', url: 'https://www.google.com/maps', color: '#188038' },
+  { label: 'Waze', url: 'https://waze.com/ul', color: '#33ccff' },
+  { label: 'Spotify', url: 'https://open.spotify.com', color: '#1db954' },
+  { label: 'YouTube Music', url: 'https://music.youtube.com', color: '#c4302b' },
+  { label: 'YouTube', url: 'https://m.youtube.com', color: '#e62117' },
+];
+let stereoApps = null;
+function renderStereoApps() {
+  const grid = $('#stereo-apps');
+  const hint = $('#stereo-apps-hint');
+  if (native?.listApps) {
+    if (!stereoApps) {
+      try { stereoApps = JSON.parse(native.listApps()); } catch { stereoApps = []; }
+    }
+    grid.innerHTML = stereoApps.map((a, i) => `<button class="launch" data-pkg="${i}"><span class="ic ic-app"><img src="${a.icon}" alt="" decoding="async"></span><span class="lbl">${escapeHtml(a.label)}</span></button>`).join('');
+    hint.textContent = '';
+  } else {
+    $('#stereo-apps-head').textContent = 'Open in app';
+    grid.innerHTML = WEB_APPS.map((a, i) => `<button class="launch" data-web="${i}"><span class="ic ic-letter" style="background:${a.color}">${escapeHtml(a.label.charAt(0))}</span><span class="lbl">${escapeHtml(a.label)}</span></button>`).join('');
+    hint.innerHTML = 'Install the <a href="apk/car-auto-dash.apk">Car-Auto Dash</a> Android app on this stereo to open every installed app from here and start automatically with the car.';
+  }
+}
+$('#stereo-apps').addEventListener('click', (e) => {
+  const b = e.target.closest('.launch');
+  if (!b) return;
+  if (b.dataset.pkg != null) native.launchApp(stereoApps[+b.dataset.pkg].pkg);
+  else openExternal(WEB_APPS[+b.dataset.web].url);
+});
+ctx.openStereoApp = (name) => {
+  if (/^(android auto|headunit|open headunit)$/i.test(name.trim())) { startAndroidAuto(); return true; }
+  if (!native?.listApps) return false;
+  renderStereoApps();
+  const q = name.toLowerCase();
+  const app = stereoApps.find((a) => a.label.toLowerCase() === q) || stereoApps.find((a) => a.label.toLowerCase().includes(q));
+  if (app) native.launchApp(app.pkg);
+  return !!app;
+};
 
 // ---- Notifications (messages sent from the phone) ----
 
@@ -168,7 +243,7 @@ $('#btn-clear-msgs').addEventListener('click', () => { messages = []; store.set(
 
 let huTimer;
 let huMsg = null;
-function showMessage(from, text) {
+function showMessage(from, text, { silent = false } = {}) {
   const m = { from, text, at: Date.now() };
   messages.unshift(m);
   messages = messages.slice(0, 30);
@@ -179,7 +254,7 @@ function showMessage(from, text) {
   box.querySelector('.from').textContent = from;
   box.querySelector('.body').textContent = text;
   box.hidden = false;
-  speak(`Message from ${from}. ${text}`);
+  if (!silent) speak(`Message from ${from}. ${text}`);
   clearTimeout(huTimer);
   huTimer = setTimeout(() => { box.hidden = true; }, 12000);
 }
@@ -196,13 +271,36 @@ if (!code) { code = genPairCode(); store.set('pairCode', code); }
 let host = null;
 let linkState = 'offline';
 
+// What the pairing QR code contains:
+// - a hosted web address (browser version, or "Web address" set in Advanced):
+//   phones open the web remote, and Car-Auto Link can scan it too;
+// - otherwise (stereo app with no hosting): a carauto:// link that opens the
+//   Car-Auto Link phone app directly.
+function webBase() {
+  if (settings.webAddress) return settings.webAddress;
+  return native ? null : location.href;
+}
+
 function phoneUrl() {
-  const u = new URL('phone.html', location.href);
+  const srv = settings.peerServer?.host ? btoa(JSON.stringify(settings.peerServer)) : null;
+  const base = webBase();
+  if (!base) {
+    const p = new URLSearchParams({ code });
+    if (srv) p.set('srv', srv);
+    return `carauto://pair?${p}`;
+  }
+  const u = new URL('phone.html', base);
   if (transportFromUrl() === 'local') u.searchParams.set('transport', 'local');
   const hash = new URLSearchParams({ pair: code });
-  if (settings.peerServer?.host) hash.set('srv', btoa(JSON.stringify(settings.peerServer)));
+  if (srv) hash.set('srv', srv);
   u.hash = hash.toString();
   return u.toString();
+}
+
+function pairHelpText() {
+  return webBase()
+    ? 'Scan with your phone camera (Android or iPhone) to open the remote. In Car-Auto Link, tap <b>Scan QR code</b>.'
+    : 'On your Android phone, open <b>Car-Auto Link</b> and tap <b>Scan QR code</b>. For iPhones, set a <b>Web address</b> under Advanced.';
 }
 
 function startLink() {
@@ -214,12 +312,19 @@ function startLink() {
     $('#pair-status').className = state === 'online' ? 'good' : state === 'error' ? 'bad' : 'muted';
     bus.emit('link', { count: host.clientCount, state });
   });
-  host.on('clients', ({ count }) => bus.emit('link', { count, state: linkState }));
+  host.on('clients', ({ count }) => {
+    bus.emit('link', { count, state: linkState });
+    if (nativeLinkId && !host.clients.has(nativeLinkId)) {
+      nativeLinkId = null;
+      music.setPhoneMedia(null);
+      bus.emit('phone:linked', false);
+    }
+  });
   host.on('join', ({ send }) => {
     send({ t: 'welcome', carName: settings.carName, home: settings.home, work: settings.work });
     send(stateMsg());
   });
-  host.on('message', ({ msg, reply }) => handlePhoneMessage(msg, reply));
+  host.on('message', ({ id, msg, reply }) => handlePhoneMessage(msg, reply, id));
   host.start();
 }
 
@@ -234,10 +339,28 @@ function broadcastState() {
 }
 bus.on('nav', debounce(broadcastState, 500));
 
-function handlePhoneMessage(msg, reply) {
+function handlePhoneMessage(msg, reply, id) {
   switch (msg.t) {
     case 'hello':
-      toast(`${msg.name || 'Phone'} connected`);
+      if (msg.caps?.native && nativeLinkId !== id) {
+        nativeLinkId = id;
+        toast(`${msg.name || 'Phone'} linked: music, calls and contacts`);
+        bus.emit('phone:linked', true);
+      } else if (!msg.caps?.native) {
+        toast(`${msg.name || 'Phone'} connected`);
+      }
+      break;
+    case 'phoneMedia':
+      if (id === nativeLinkId) music.setPhoneMedia(msg.media);
+      break;
+    case 'phoneCall':
+      if (id === nativeLinkId) bus.emit('phone:call', msg);
+      break;
+    case 'contacts':
+      if (id === nativeLinkId) bus.emit('phone:contacts', msg);
+      break;
+    case 'recents':
+      if (id === nativeLinkId) bus.emit('phone:recents', msg);
       break;
     case 'nav':
       if (Number.isFinite(msg.lat) && Number.isFinite(msg.lon)) {
@@ -277,6 +400,7 @@ function handlePhoneMessage(msg, reply) {
 
 async function renderPairing() {
   $('#pair-code').textContent = code;
+  $('#pair-help').innerHTML = pairHelpText();
   const url = phoneUrl();
   $('#pair-url').textContent = url;
   try {
@@ -302,7 +426,7 @@ function bindSetting(id, key, { parse = (v) => v, after } = {}) {
 }
 
 bindSetting('#set-carname', 'carName');
-bindSetting('#set-units', 'units', { after: () => { home.refreshUnits(); setSpeedUnit(); broadcastState(); } });
+bindSetting('#set-units', 'units', { after: () => { home.refreshUnits(); vehicle.refreshUnits(); setSpeedUnit(); broadcastState(); } });
 bindSetting('#set-voice', 'voiceGuidance');
 bindSetting('#set-gps', 'gpsSource', { after: broadcastState });
 bindSetting('#set-theme', 'theme', { after: applyTheme });
@@ -358,6 +482,27 @@ $$('.place').forEach((row) => {
 });
 renderPlaces();
 
+const webInput = $('#set-webaddress');
+webInput.value = settings.webAddress || '';
+webInput.addEventListener('change', () => {
+  const v = webInput.value.trim();
+  if (v) {
+    try {
+      const u = new URL(v);
+      if (u.protocol !== 'https:') throw new Error('https');
+      settings.webAddress = u.href.endsWith('/') || u.pathname.endsWith('.html') ? u.href : `${u.href}/`;
+    } catch {
+      toast('Enter the full https:// address where the web version is hosted');
+      return;
+    }
+  } else {
+    settings.webAddress = '';
+  }
+  webInput.value = settings.webAddress;
+  saveSettings();
+  renderPairing();
+});
+
 const srvInput = $('#set-server');
 srvInput.value = settings.peerServer ? `${settings.peerServer.secure === false ? 'http' : 'https'}://${settings.peerServer.host}:${settings.peerServer.port}${settings.peerServer.path || '/'}` : '';
 srvInput.addEventListener('change', () => {
@@ -381,6 +526,19 @@ $('#btn-reset').addEventListener('click', () => {
   Object.keys(localStorage).filter((k) => k.startsWith('carauto.')).forEach((k) => localStorage.removeItem(k));
   location.reload();
 });
+
+if (native) {
+  $('#native-card').hidden = false;
+  $('#get-app-card').hidden = true;
+  const auto = $('#set-autostart');
+  auto.checked = !!native.getAutoStart?.();
+  auto.addEventListener('change', () => native.setAutoStart(auto.checked));
+  const refreshOverlay = () => { $('#btn-overlay').hidden = !native.needsOverlayPermission?.(); };
+  refreshOverlay();
+  document.addEventListener('visibilitychange', refreshOverlay);
+  $('#btn-overlay').addEventListener('click', () => native.openSettings('overlay'));
+  $('#btn-home').addEventListener('click', () => native.openSettings('home'));
+}
 
 function toggleFullscreen() {
   if (document.fullscreenElement) document.exitFullscreen();
@@ -414,4 +572,10 @@ requestAnimationFrame(() => setTimeout(() => {
 const startView = new URLSearchParams(location.hash.slice(1)).get('view');
 if (startView) showView(startView);
 
-window.carauto = { ctx, settings, get host() { return host; }, code: () => code };
+// Called by the Android app for the Back key: close the open app, if any.
+function back() {
+  if (currentView !== 'home') { showView('home'); return true; }
+  return false;
+}
+
+window.carauto = { ctx, settings, back, get host() { return host; }, code: () => code };
