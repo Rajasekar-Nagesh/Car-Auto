@@ -4,6 +4,7 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.bluetooth.BluetoothManager
+import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
@@ -37,9 +38,18 @@ class MainActivity : Activity() {
 
     private lateinit var status: TextView
     private lateinit var codeInput: EditText
-    private lateinit var notifBtn: Button
-    private lateinit var phoneBtn: Button
-    private lateinit var batteryBtn: Button
+    /** One line in the permissions checklist. */
+    private class Access(
+        val label: String,
+        val why: String,
+        val granted: () -> Boolean,
+        val request: () -> Unit,
+    ) {
+        lateinit var title: TextView
+        lateinit var button: Button
+    }
+
+    private val accessList = mutableListOf<Access>()
     private lateinit var btSpinner: Spinner
     private lateinit var btHint: TextView
     private var btAddresses: List<String?> = emptyList()
@@ -48,6 +58,12 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         buildUi()
         handleIntent(intent)
+        // First launch: ask for the basic permissions straight away.
+        val prefs = getSharedPreferences("link", MODE_PRIVATE)
+        if (!prefs.getBoolean("askedPermissions", false)) {
+            prefs.edit().putBoolean("askedPermissions", true).apply()
+            requestRuntime(*basicPermissions)
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -59,7 +75,7 @@ class MainActivity : Activity() {
         super.onResume()
         LinkService.statusListener = { text -> runOnUiThread { status.text = text } }
         status.text = if (LinkService.running) LinkService.status else "Not connected"
-        refreshPermissionButtons()
+        refreshAccess()
         loadBluetoothDevices()
     }
 
@@ -134,6 +150,7 @@ class MainActivity : Activity() {
         val muted = Color.rgb(0x9a, 0xa0, 0xa6)
 
         root.addView(text("Car-Auto Link", 26f, true))
+        root.addView(text("Version $appVersion", 13f, color = muted))
         root.addView(text("Shows this phone's music, calls and contacts on your Car-Auto car screen — like Android Auto.", 15f, color = muted))
         status = text("Not connected", 16f, true, Color.rgb(0x6d, 0xd5, 0x8c))
         root.addView(status)
@@ -165,14 +182,28 @@ class MainActivity : Activity() {
         root.addView(row)
 
         section("2. Allow access", root)
-        notifBtn = button("Allow notification access (music & caller names)") {
-            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+        root.addView(text("Tap Allow on each line. ✓ means it's done.", 14f, color = muted))
+        buildAccessList()
+        accessList.forEach { a ->
+            val line = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, dp(4), 0, dp(4))
+            }
+            val texts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            a.title = text(a.label, 16f, true).apply { setPadding(0, 0, 0, 0) }
+            texts.addView(a.title)
+            texts.addView(text(a.why, 13f, color = muted).apply { setPadding(0, 0, 0, 0) })
+            line.addView(texts, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+            a.button = button("Allow") { a.request() }
+            line.addView(a.button, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+            root.addView(line, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         }
-        phoneBtn = button("Allow phone, contacts & call log") { requestPhonePermissions() }
-        batteryBtn = button("Keep running in the background") { requestBatteryExemption() }
-        if (Edition.FULL) root.addView(notifBtn)
-        root.addView(phoneBtn)
-        root.addView(batteryBtn)
+        root.addView(text(
+            "Notification access greyed out or \"restricted setting\"? Tap the button below, then ⋮ (top right) → Allow restricted settings, and try again.",
+            13f, color = muted,
+        ).apply { setPadding(0, dp(12), 0, 0) })
+        root.addView(button("Open app settings") { openAppSettings() }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
 
         section("3. Options", root)
         val gps = Switch(this).apply {
@@ -206,21 +237,78 @@ class MainActivity : Activity() {
 
     // ---- Permissions ----
 
-    private val phonePermissions: Array<String>
-        get() = buildList {
-            add(Manifest.permission.READ_PHONE_STATE)
-            add(Manifest.permission.READ_CALL_LOG)
-            add(Manifest.permission.READ_CONTACTS)
-            add(Manifest.permission.CALL_PHONE)
-            add(Manifest.permission.ANSWER_PHONE_CALLS)
-            if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
-            if (Build.VERSION.SDK_INT >= 31) add(Manifest.permission.BLUETOOTH_CONNECT)
-        }.toTypedArray()
+    private val appVersion: String
+        get() = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull() ?: "?"
 
-    private fun hasAllPhonePermissions() = phonePermissions.all { checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
+    private fun has(vararg perms: String) = perms.all { checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
 
-    private fun requestPhonePermissions() {
-        requestPermissions(phonePermissions, REQ_PHONE)
+    private val phonePerms = arrayOf(
+        Manifest.permission.READ_PHONE_STATE,
+        Manifest.permission.CALL_PHONE,
+        Manifest.permission.ANSWER_PHONE_CALLS,
+    )
+    private val notificationPerms = if (Build.VERSION.SDK_INT >= 33) arrayOf(Manifest.permission.POST_NOTIFICATIONS) else emptyArray()
+    private val nearbyPerms = if (Build.VERSION.SDK_INT >= 31) arrayOf(Manifest.permission.BLUETOOTH_CONNECT) else emptyArray()
+
+    /** Everything except location, which is only needed for GPS sharing. */
+    private val basicPermissions: Array<String>
+        get() = phonePerms + arrayOf(Manifest.permission.READ_CONTACTS, Manifest.permission.READ_CALL_LOG) + notificationPerms + nearbyPerms
+
+    private fun hasAllPhonePermissions() = has(*basicPermissions)
+
+    private fun requestPhonePermissions() = requestRuntime(*basicPermissions)
+
+    /** Ask for runtime permissions; if Android won't show the dialog any more, open app settings instead. */
+    private fun requestRuntime(vararg perms: String) {
+        val missing = perms.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
+        if (missing.isEmpty()) return
+        val prefs = getSharedPreferences("link", MODE_PRIVATE)
+        val askedBefore = missing.all { prefs.getBoolean("asked_$it", false) }
+        val blocked = askedBefore && missing.none { shouldShowRequestPermissionRationale(it) }
+        if (blocked) {
+            Toast.makeText(this, "Allow it under Permissions in app settings", Toast.LENGTH_LONG).show()
+            openAppSettings()
+            return
+        }
+        prefs.edit().apply { missing.forEach { putBoolean("asked_$it", true) } }.apply()
+        requestPermissions(missing.toTypedArray(), REQ_PHONE)
+    }
+
+    private fun buildAccessList() {
+        accessList.clear()
+        accessList += Access(
+            "Notification access", "Song title, album art and caller names on the car screen",
+            { hasNotificationAccess() }, { openNotificationAccess() },
+        )
+        accessList += Access("Phone", "Incoming-call screen, answer and hang up from the car", { has(*phonePerms) }, { requestRuntime(*phonePerms) })
+        accessList += Access("Contacts", "Names and the Contacts tab on the car", { has(Manifest.permission.READ_CONTACTS) }, { requestRuntime(Manifest.permission.READ_CONTACTS) })
+        accessList += Access("Call logs", "The Recents tab on the car", { has(Manifest.permission.READ_CALL_LOG) }, { requestRuntime(Manifest.permission.READ_CALL_LOG) })
+        if (notificationPerms.isNotEmpty()) {
+            accessList += Access("Notifications", "Shows \"Connected to car\" while linked", { has(*notificationPerms) }, { requestRuntime(*notificationPerms) })
+        }
+        if (nearbyPerms.isNotEmpty()) {
+            accessList += Access("Nearby devices", "Start automatically with the car's Bluetooth", { has(*nearbyPerms) }, { requestRuntime(*nearbyPerms) })
+        }
+        accessList += Access(
+            "Location (optional)", "Only to share this phone's GPS with the car",
+            { has(Manifest.permission.ACCESS_FINE_LOCATION) }, { requestRuntime(Manifest.permission.ACCESS_FINE_LOCATION) },
+        )
+        accessList += Access("Battery: unrestricted", "Keeps the link running while you drive", { ignoresBatteryOptimizations() }, { requestBatteryExemption() })
+    }
+
+    private fun openNotificationAccess() {
+        val detail = if (Build.VERSION.SDK_INT >= 30) {
+            Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)
+                .putExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, ComponentName(this, NotifListener::class.java).flattenToString())
+        } else {
+            null
+        }
+        val opened = detail != null && runCatching { startActivity(detail) }.isSuccess
+        if (!opened) runCatching { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
+    }
+
+    private fun openAppSettings() {
+        runCatching { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))) }
     }
 
     private fun hasNotificationAccess(): Boolean =
@@ -236,20 +324,18 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun mark(button: Button, done: Boolean, label: String) {
-        button.text = if (done) "✓ $label" else label
-        button.isEnabled = !done
-    }
-
-    private fun refreshPermissionButtons() {
-        if (Edition.FULL) mark(notifBtn, hasNotificationAccess(), "Allow notification access (music & caller names)")
-        mark(phoneBtn, hasAllPhonePermissions(), "Allow phone, contacts & call log")
-        mark(batteryBtn, ignoresBatteryOptimizations(), "Keep running in the background")
+    private fun refreshAccess() {
+        accessList.forEach { a ->
+            val ok = a.granted()
+            a.title.text = if (ok) "✓  ${a.label}" else "✗  ${a.label}"
+            a.title.setTextColor(if (ok) Color.rgb(0x6d, 0xd5, 0x8c) else Color.WHITE)
+            a.button.visibility = if (ok) View.GONE else View.VISIBLE
+        }
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        refreshPermissionButtons()
+        refreshAccess()
         loadBluetoothDevices()
         // Restart so call tracking and GPS pick up the new permissions.
         if (LinkService.running) LinkService.restart(this)
