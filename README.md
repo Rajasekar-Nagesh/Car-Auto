@@ -14,6 +14,7 @@ It comes in two parts. Each one is available as an Android app (full experience)
 | Feature | Needs |
 |---|---|
 | Split-screen dashboard: live map, media card, weather, next turns, quick dial | — |
+| **Trip computer**: start time, running hours, trip distance, odometer, fuel mileage (km/l), service reminder, trip history | — |
 | **Maps** with turn-by-turn voice guidance, rerouting, Home/Work, recent places; hand off to **Google Maps** or **Waze** | — |
 | **Music**: internet radio, favorites, files from the stereo or USB | — |
 | **Your phone's music on the car screen**: whatever plays in Spotify, YouTube Music, podcasts… with album art, progress and controls | Car-Auto Link |
@@ -44,6 +45,20 @@ When to use which: **Android Auto** gives you your phone's own apps on the scree
 * **Split-screen dashboard**: the live map on the left, with a media card and a context card on the right. The context card shows weather and suggested destinations, or your next turns while navigating.
 * **Full-screen apps**: Music, Phone (Favorites, Recents, Contacts, Keypad), Notifications and Settings, plus an **app grid** that also lists the stereo's apps. The stereo's **Back** button returns to the dashboard.
 * Calls appear as a full-screen **incoming call** card. During a call, a green bar shows the caller and the timer, and the stereo's own radio is paused.
+
+### Trip computer (Vehicle)
+
+The home screen shows a trip strip: **Started · Running · Trip distance · Mileage**. Tap it, or open **Vehicle** in the app grid, for the full view:
+
+* **This trip:** start time, running time (moving and idling), distance, average and top speed, estimated fuel used and cost.
+* **Totals:** odometer, total running hours (like engine hours), today's distance and trips.
+* **Fuel & mileage:** log fill-ups (litres, price, odometer, full tank). Mileage is averaged between full-tank fill-ups, the most accurate method.
+* **Service reminder:** enter the odometer reading for your next service. You get a notification 500 km (300 mi) before it.
+* **Recent trips:** date, times, distance and duration of your last 20 drives.
+
+How it works without a car connection: the stereo turns on with the ignition, so a trip starts when Car-Auto opens or wakes after 10+ minutes off. Running time counts while the stereo is on. Distance comes from GPS, with parked jitter and GPS jumps filtered out. **Set your odometer once** (Vehicle → Odometer) so it matches your dashboard, then the app keeps adding to it. Say *"How far have I driven?"* or *"Trip info"* for a spoken summary.
+
+> Exact engine data (real engine hours, fuel level, RPM) needs an OBD-II Bluetooth adapter. That isn't supported yet.
 
 ### Built for speed
 

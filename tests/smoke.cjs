@@ -196,6 +196,43 @@ async function mockNetwork(context) {
     await car.waitForSelector('#maneuver', { state: 'hidden' });
     check(true, 'arrival ends navigation');
 
+    // Vehicle trip computer
+    const before = await car.evaluate(() => window.carauto.ctx.vehicle._state().trip.dist);
+    await car.evaluate(() => {
+      // realistic drive: 30 fixes, 1 s apart, 14 m each (~50 km/h) + GPS jitter while parked
+      const t0 = Date.now() + 5000;
+      const bus = window.carauto.ctx.bus;
+      for (let i = 0; i <= 30; i++) bus.emit('pos', { lat: 12.98 + i * 14 / 110540, lon: 77.6, speed: 14, acc: 5, time: t0 + i * 1000 });
+      for (let i = 1; i <= 10; i++) bus.emit('pos', { lat: 12.98 + 420 / 110540 + (i % 2) * 0.00002, lon: 77.6, speed: 0, acc: 8, time: t0 + 31000 + i * 1000 });
+    });
+    const added = (await car.evaluate(() => window.carauto.ctx.vehicle._state().trip.dist)) - before;
+    check(added > 400 && added < 440, `trip distance from GPS, parked jitter ignored (+${Math.round(added)} m of 420)`);
+    check(/\d{1,2}:\d{2}/.test(await car.textContent('#veh-start')), 'home shows trip start time');
+    await car.click('#trip-card');
+    await car.waitForSelector('#view-vehicle:not([hidden])');
+    await car.fill('#odo-form [name=odo]', '45000');
+    await car.click('#odo-form button');
+    await car.fill('#fuel-form [name=litres]', '30');
+    await car.fill('#fuel-form [name=price]', '100');
+    await car.fill('#fuel-form [name=odo]', '44600');
+    await car.click('#fuel-form button');
+    await car.fill('#fuel-form [name=litres]', '25');
+    await car.fill('#fuel-form [name=price]', '102');
+    await car.fill('#fuel-form [name=odo]', '45000');
+    await car.click('#fuel-form button');
+    check((await car.textContent('#veh-mileage')).includes('16.0 km/l'), 'mileage from full-tank fill-ups (16.0 km/l)');
+    check((await car.textContent('#veh-totals')).includes('45,000'), 'odometer shown in totals');
+    await car.fill('#service-form [name=due]', '45300');
+    await car.click('#service-form button');
+    check((await car.textContent('#veh-service')).includes('300'), 'service reminder shows distance left');
+    check((await car.textContent('#veh-trip-stats')).includes('Fuel used'), 'trip fuel estimate shown');
+    await car.screenshot({ path: `${SHOTS}/car-vehicle.png` });
+    await car.goBack();
+    await car.waitForSelector('#view-vehicle', { state: 'hidden' });
+    check((await car.textContent('#veh-mileage-home')).includes('km/l'), 'home trip card shows mileage');
+    const tripCmd = await car.evaluate(async () => (await import('./js/car/voice.js')).parseCommand('how far have I driven').cmd);
+    check(tripCmd === 'trip', 'voice: "how far have I driven"');
+
     // Media + message from phone
     await phone.click('[data-media=next]');
     await phone.fill('#say-form textarea', 'Pick up milk');
@@ -313,7 +350,15 @@ async function mockNetwork(context) {
         openSettings: (w) => window.__log.push(`settings:${w}`),
       };
     }, `data:image/png;base64,${PNG.toString('base64')}`);
+    await dash.addInitScript(() => {
+      const now = Date.now();
+      // previous drive that ended 30 minutes ago (stereo was off since)
+      localStorage.setItem('carauto.trip', JSON.stringify({ start: now - 90 * 60000, lastSeen: now - 30 * 60000, dist: 12000, moving: 2400, idle: 600, maxSpeed: 20, lastFix: null }));
+    });
     await dash.goto(`${BASE}/car.html?transport=local`);
+    await dash.waitForFunction(() => window.carauto?.ctx?.vehicle);
+    const st = await dash.evaluate(() => window.carauto.ctx.vehicle._state());
+    check(st.v.trips.length === 1 && st.v.trips[0].dist === 12000 && Date.now() - st.trip.start < 60000, 'stereo off >10 min starts a new trip and saves the old one');
     await dash.click('.taskbar [data-view=apps]');
     await dash.waitForSelector('#stereo-apps .launch');
     check(await dash.locator('#stereo-apps .launch').count() === 3, 'app grid lists apps installed on the stereo');

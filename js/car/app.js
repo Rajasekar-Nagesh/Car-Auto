@@ -12,6 +12,7 @@ import { createPhone } from './phone.js';
 import { createVoice } from './voice.js';
 import { createHome } from './home.js';
 import { createCalls } from './calls.js';
+import { createVehicle } from './vehicle.js';
 
 // The Car-Auto Dash Android app (stereo) exposes window.CarAutoNative and
 // delivers events (media keys, voice results) through this hook.
@@ -78,6 +79,7 @@ function showView(name, { fromHistory = false } = {}) {
   if (name === 'settings') renderPairing();
   if (name === 'messages') renderMessages();
   if (name === 'apps') renderStereoApps();
+  if (name === 'vehicle') vehicle?.onShow();
   // Android back button / gesture closes apps and returns to the dashboard.
   if (!fromHistory) {
     if (!isDash && !wasApp) history.pushState({ app: name }, '');
@@ -130,6 +132,8 @@ const voice = createVoice(ctx);
 ctx.voiceCmd = voice;
 const calls = createCalls(ctx);
 ctx.calls = calls;
+const vehicle = createVehicle(ctx);
+ctx.vehicle = vehicle;
 bus.on('notify', ({ from, text }) => showMessage(from, text, { silent: true }));
 
 // Steering-wheel / hardware media keys forwarded by the Android app.
@@ -397,7 +401,7 @@ function bindSetting(id, key, { parse = (v) => v, after } = {}) {
 }
 
 bindSetting('#set-carname', 'carName');
-bindSetting('#set-units', 'units', { after: () => { home.refreshUnits(); setSpeedUnit(); broadcastState(); } });
+bindSetting('#set-units', 'units', { after: () => { home.refreshUnits(); vehicle.refreshUnits(); setSpeedUnit(); broadcastState(); } });
 bindSetting('#set-voice', 'voiceGuidance');
 bindSetting('#set-gps', 'gpsSource', { after: broadcastState });
 bindSetting('#set-theme', 'theme', { after: applyTheme });

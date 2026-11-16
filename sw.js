@@ -2,7 +2,7 @@
 // dashboard opens instantly, even without signal. Map tiles are cached as you drive (up to a limit) so
 // recently seen areas still show when coverage drops.
 
-const VERSION = 'v3';
+const VERSION = 'v4';
 const SHELL = `carauto-shell-${VERSION}`;
 const TILES = 'carauto-tiles';
 const MAX_TILES = 1500;
@@ -11,7 +11,7 @@ const ASSETS = [
   './', 'index.html', 'car.html', 'phone.html',
   'css/app.css',
   'js/common.js', 'js/link.js',
-  'js/car/app.js', 'js/car/nav.js', 'js/car/music.js', 'js/car/phone.js', 'js/car/voice.js', 'js/car/home.js', 'js/car/calls.js',
+  'js/car/app.js', 'js/car/nav.js', 'js/car/music.js', 'js/car/phone.js', 'js/car/voice.js', 'js/car/home.js', 'js/car/calls.js', 'js/car/vehicle.js',
   'js/phone/app.js',
   'vendor/leaflet/leaflet.js', 'vendor/leaflet/leaflet.css',
   'vendor/leaflet/images/marker-icon.png', 'vendor/leaflet/images/marker-icon-2x.png', 'vendor/leaflet/images/marker-shadow.png',

@@ -21,6 +21,7 @@
   <link rel="modulepreload" href="js/car/phone.js">
   <link rel="modulepreload" href="js/car/voice.js">
   <link rel="modulepreload" href="js/car/calls.js">
+  <link rel="modulepreload" href="js/car/vehicle.js">
 </head>
 <body class="car">
   <!-- Taskbar -->
@@ -102,6 +103,12 @@
             <button class="ctl" data-media="next" aria-label="Next"><svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6zM16 6v12h2V6z"/></svg></button>
           </div>
         </div>
+        <div class="card trip-card" id="trip-card" role="button" tabindex="0" aria-label="Open trip details">
+          <div class="trip-stat"><span>Started</span><b id="veh-start">--:--</b></div>
+          <div class="trip-stat"><span>Running</span><b id="veh-running">0m</b></div>
+          <div class="trip-stat"><span>Trip</span><b id="veh-dist">0.0 km</b></div>
+          <div class="trip-stat"><span>Mileage</span><b id="veh-mileage-home">—</b></div>
+        </div>
         <div class="card ctx-card" id="ctx-card">
           <div class="ctx-top">
             <div id="home-weather" class="weather"></div>
@@ -118,6 +125,7 @@
     <section class="app-view" id="view-apps" hidden>
       <div class="launcher">
         <button class="launch" data-open="aa"><span class="ic ic-aa"><svg viewBox="0 0 24 24"><path d="M12 2 3 21l9-5 9 5z"/></svg></span>Android Auto</button>
+        <button class="launch" data-open="vehicle"><span class="ic ic-vehicle"><svg viewBox="0 0 24 24"><path d="M12 4a10 10 0 0 0-8.66 15h17.32A10 10 0 0 0 12 4zm0 2a8 8 0 0 1 7.4 11H4.6A8 8 0 0 1 12 6zm4.24 2.76-4.95 3.54a1.5 1.5 0 1 0 1.41 1.41z"/></svg></span>Vehicle</button>
         <button class="launch" data-open="map"><span class="ic ic-maps"><svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg></span>Maps</button>
         <button class="launch" data-open="music"><span class="ic ic-music"><svg viewBox="0 0 24 24"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3z"/></svg></span>Music</button>
         <button class="launch" data-open="radio"><span class="ic ic-radio"><svg viewBox="0 0 24 24"><path d="M3.24 6.15A2 2 0 0 0 2 8v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2H8.3l8.26-3.34L15.88 1zM7 20a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm13-8h-2v-2h-2v2H4V8h16z"/></svg></span>Radio</button>
@@ -200,6 +208,34 @@
           </div>
         </div>
       </div>
+    </section>
+
+    <section class="app-view view-vehicle" id="view-vehicle" hidden>
+      <div class="app-bar"><h2>Vehicle</h2><button class="btn" id="veh-new-trip">Start new trip</button></div>
+      <div class="veh-grid">
+        <div class="card veh-wide"><h3>This trip</h3><div class="stat-grid" id="veh-trip-stats"></div></div>
+        <div class="card"><h3>Totals</h3><div class="stat-grid two" id="veh-totals"></div></div>
+        <div class="card">
+          <h3>Odometer &amp; service</h3>
+          <form id="odo-form" class="row"><input name="odo" type="number" inputmode="decimal" step="0.1" min="0" placeholder="Current odometer reading" aria-label="Odometer reading"><button class="btn" type="submit">Set</button></form>
+          <form id="service-form" class="row"><input name="due" type="number" inputmode="numeric" step="1" min="0" placeholder="Next service at (odometer)" aria-label="Next service odometer"><button class="btn" type="submit">Save</button></form>
+          <p id="veh-service" class="muted"></p>
+        </div>
+        <div class="card">
+          <h3>Fuel &amp; mileage</h3>
+          <div id="veh-mileage" class="big-stat"></div>
+          <form id="fuel-form" class="fuel-form" autocomplete="off">
+            <input name="litres" type="number" inputmode="decimal" step="0.01" min="0" placeholder="Litres" required aria-label="Litres">
+            <input name="price" type="number" inputmode="decimal" step="0.01" min="0" placeholder="Price per litre" aria-label="Price per litre">
+            <input name="odo" type="number" inputmode="decimal" step="0.1" min="0" placeholder="Odometer" aria-label="Odometer at fill-up">
+            <label class="switch"><input type="checkbox" name="full" checked> Full tank</label>
+            <button class="btn primary" type="submit">Add fill-up</button>
+          </form>
+          <div id="fuel-list" class="mini-list"></div>
+        </div>
+        <div class="card veh-wide"><h3>Recent trips</h3><div id="trip-history" class="mini-list"></div></div>
+      </div>
+      <p class="muted small pad">A trip starts when the stereo turns on (or wakes after 10+ minutes off). Distance comes from GPS; set your odometer once to keep it in step with the car.</p>
     </section>
 
     <section class="app-view view-messages" id="view-messages" hidden>
