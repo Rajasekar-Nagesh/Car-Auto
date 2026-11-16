@@ -57,6 +57,17 @@
             </intent-filter>
         </activity>
 
+        <!-- Notification access (optional): show the song playing over Bluetooth. -->
+        <service
+            android:name=".DashNotifListener"
+            android:exported="true"
+            android:label="Car-Auto Dash"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
         <receiver
             android:name=".BootReceiver"
             android:exported="true">

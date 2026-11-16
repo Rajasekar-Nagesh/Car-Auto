@@ -174,6 +174,7 @@ class MainActivity : Activity() {
         // voice guidance keep running while you use another app.
         web.onResume()
         web.resumeTimers()
+        DashMedia.start(this) // picks up notification access granted while away
     }
 
     override fun onDestroy() {

@@ -16,7 +16,7 @@ It comes in two parts. Each one is available as an Android app (full experience)
 | Split-screen dashboard: live map, media card, weather, next turns, quick dial | — |
 | **Trip computer**: start time, running hours, trip distance, odometer, fuel mileage (km/l), service reminder, trip history | — |
 | **Maps** with turn-by-turn voice guidance, rerouting, Home/Work, recent places; hand off to **Google Maps** or **Waze** | — |
-| **Music**: internet radio, favorites, files from the stereo or USB | — |
+| **Music**: internet radio, favorites, files from the stereo or USB, and **Play via Bluetooth** (your phone's audio through the stereo's Bluetooth, with controls; song names with notification access on the stereo) | — |
 | **Your phone's music on the car screen**: whatever plays in Spotify, YouTube Music, podcasts… with album art, progress and controls | Car-Auto Link |
 | **Incoming call screen** (Answer / Decline), in-call bar with timer and End | Car-Auto Link |
 | **Messages** from WhatsApp, SMS, Telegram… pop up on the car, read aloud; **reply** with quick replies or by voice | Car-Auto Link |

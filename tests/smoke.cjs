@@ -396,6 +396,12 @@ async function mockNetwork(context) {
         setAutoStart: (v) => window.__log.push(`autostart:${v}`),
         needsOverlayPermission: () => true,
         openSettings: (w) => window.__log.push(`settings:${w}`),
+        getBtMedia: () => 'null',
+        btCmd: (c) => window.__log.push(`bt:${c}`),
+        btInfoAllowed: () => false,
+        allowBtInfo: () => window.__log.push('bt:info'),
+        bluetoothAppName: () => 'BT Music',
+        switchToBluetooth: () => { window.__log.push('bt:switch'); return true; },
       };
     }, `data:image/png;base64,${PNG.toString('base64')}`);
     await dash.addInitScript(() => {
@@ -437,6 +443,26 @@ async function mockNetwork(context) {
     await dash.waitForFunction(() => document.querySelector('#pair-url').textContent.startsWith('https://my-car.netlify.app/phone.html'));
     check(true, 'with a web address set, the QR code uses it (works for iPhones)');
     await dash.click('#set-autostart');
+
+    // Play via Bluetooth (stereo's Bluetooth app)
+    await dash.click('.taskbar [data-view=music]');
+    await dash.click('#music-tabs [data-tab=bt]');
+    await dash.waitForSelector('.bt-panel');
+    check((await dash.textContent('.bt-panel')).includes('BT Music') && await dash.isVisible('[data-bt=info]'), 'Bluetooth tab: switch button names the stereo BT app, offers song info');
+    await dash.click('[data-bt=switch]');
+    let dlog = await dash.evaluate(() => window.__log);
+    check(dlog.includes('bt:switch') && dlog.includes('bt:play'), 'Play via Bluetooth switches the stereo and starts the phone');
+    check((await dash.textContent('.music-side [data-np=title]')) === 'Bluetooth audio', 'now playing shows Bluetooth audio');
+    await dash.evaluate(() => window.carautoNative.onEvent({ type: 'btmedia', media: { title: 'BT Song', artist: 'BT Artist', app: 'BT Music', pkg: 'com.syu.bt', bluetooth: true, playing: true, duration: 240000, position: 1000, artKey: 'x', art: null } }));
+    await dash.waitForFunction(() => document.querySelector('.music-side [data-np=title]').textContent === 'BT Song');
+    check((await dash.textContent('.music-side [data-np=sub]')).includes('Bluetooth'), 'song info from the stereo Bluetooth app shown');
+    await dash.click('.music-side [data-media=next]');
+    await dash.click('.music-side [data-media=toggle]');
+    dlog = await dash.evaluate(() => window.__log);
+    check(dlog.includes('bt:next') && dlog.includes('bt:pause'), 'controls go to the phone over Bluetooth');
+    await dash.screenshot({ path: `${SHOTS}/dash-bluetooth.png` });
+    const btVoice = await dash.evaluate(async () => (await import('./js/car/voice.js')).parseCommand('play bluetooth').cmd);
+    check(btVoice === 'bluetooth', 'voice: "play bluetooth"');
     check((await dash.evaluate(() => window.__log)).includes('autostart:false'), 'auto-start toggle reaches the app');
     await dashCtx.close();
 
