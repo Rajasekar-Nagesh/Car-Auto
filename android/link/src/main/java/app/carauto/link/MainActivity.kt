@@ -170,7 +170,7 @@ class MainActivity : Activity() {
         }
         phoneBtn = button("Allow phone, contacts & call log") { requestPhonePermissions() }
         batteryBtn = button("Keep running in the background") { requestBatteryExemption() }
-        root.addView(notifBtn)
+        if (Edition.FULL) root.addView(notifBtn)
         root.addView(phoneBtn)
         root.addView(batteryBtn)
 
@@ -242,7 +242,7 @@ class MainActivity : Activity() {
     }
 
     private fun refreshPermissionButtons() {
-        mark(notifBtn, hasNotificationAccess(), "Allow notification access (music & caller names)")
+        if (Edition.FULL) mark(notifBtn, hasNotificationAccess(), "Allow notification access (music & caller names)")
         mark(phoneBtn, hasAllPhonePermissions(), "Allow phone, contacts & call log")
         mark(batteryBtn, ignoresBatteryOptimizations(), "Keep running in the background")
     }

@@ -91,7 +91,7 @@ GitHub builds the APKs and hosts the web app for free:
 3. Open the **Actions** tab and wait for **Deploy to GitHub Pages** to finish. Then:
    * Web app: `https://<your-github-username>.github.io/<repo-name>/` (for example `https://rajasekar-nagesh.github.io/Car-Auto/`)
    * Stereo app: `…/apk/car-auto-dash.apk`
-   * Phone app: `…/apk/car-auto-link.apk`
+   * Phone app: `…/apk/car-auto-link.apk` (standard) and `…/apk/car-auto-link-full.apk` (full, see below)
 
 Every push also runs **Build Android apps**, and its run page has the two APKs under *Artifacts*.
 
@@ -113,9 +113,13 @@ Every push also runs **Build Android apps**, and its run page has the two APKs u
 **Android: Car-Auto Link (music, calls, contacts)**
 
 1. On the phone, open `…/apk/car-auto-link.apk` and install it.
+
+   > **Two editions.** In India and some other countries, Google Play Protect blocks apps installed from a browser or file manager if they use *notification access*, which is what reading another app's song title needs. So there are two builds:
+   > * **Car-Auto Link** (`car-auto-link.apk`): installs normally. Calls, contacts, recents, Bluetooth auto-start, and **play/pause/skip** of your phone's music. No song title or album art.
+   > * **Car-Auto Link Full** (`car-auto-link-full.apk`): adds the song title, artist, album art and progress. Install it from a computer with USB debugging on: `adb install -r car-auto-link-full.apk`. Play Protect allows installs over USB. It installs over the standard edition and keeps your settings.
 2. On the stereo, open **Settings → Pair your phone**. In Car-Auto Link tap **Scan QR code** and point it at the stereo screen. It connects straight away. You can also type the code and tap **Connect**.
 3. In Car-Auto Link, tap each **Allow** button:
-   * **Notification access**: needed to see and control music from other apps and to show caller names.
+   * **Notification access** (Full edition only): shows what's playing in other music apps and caller names.
    * **Phone, contacts & call log**: incoming call screen, answer/decline, contacts, recents.
    * **Keep running in the background**: stops Android from closing the link while you drive.
 4. Under **Start automatically**, choose your car stereo's Bluetooth name. From then on the link starts by itself when you get in the car and stops when you leave.
@@ -140,7 +144,8 @@ Tap the microphone in the taskbar (or press the steering-wheel voice button with
 ## Tips and troubleshooting
 
 * **Try it parked:** turn on **Settings → Demo drive**, then pick a destination.
-* **Phone music doesn't show:** in Car-Auto Link check that *Notification access* has a ✓, then start playing something on the phone.
+* **"App blocked to protect your device" (Play Protect):** that's the Full edition. Install the standard `car-auto-link.apk` instead, or install Full over USB with `adb install`.
+* **Phone music doesn't show:** the standard edition shows "Music on your phone" with controls only. For the song title, use the Full edition and check *Notification access* has a ✓.
 * **Calls don't show:** check *Phone, contacts & call log* has a ✓. Some phone brands also need Car-Auto Link set to "No restrictions" under battery settings.
 * **"Car not found":** Car-Auto Dash must be open on the stereo and show *Online — ready for phones* in Settings; both devices need internet.
 * **Auto-start doesn't happen:** many stereos sleep instead of shutting down when the car turns off, so they never "boot". Use **Use as home screen** instead.

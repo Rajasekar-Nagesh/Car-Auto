@@ -149,7 +149,7 @@ class LinkService : Service() {
         private val ctx: Context get() = this@LinkService
 
         @JavascriptInterface
-        fun getMedia(): String = PhoneHub.mediaJson(ctx, true)?.toString() ?: "null"
+        fun getMedia(): String = (PhoneHub.mediaJson(ctx, true) ?: PhoneHub.keysOnlyMedia()).toString()
 
         @JavascriptInterface
         fun getCall(): String = PhoneHub.callJson().toString()

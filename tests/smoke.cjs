@@ -320,6 +320,13 @@ async function mockNetwork(context) {
     await car.waitForFunction(() => document.querySelector('#media-card [data-np=title]').textContent === 'Song B');
     check(true, 'track changes on the phone update the car');
     await car.screenshot({ path: `${SHOTS}/car-phone-media.png` });
+    // Standard edition of the phone app: controls only, no track info
+    await linkPage.evaluate(() => window.carautoNative.onEvent({ type: 'media', media: { title: 'Music on your phone', artist: '', app: 'Phone', playing: false, duration: 0, keysOnly: true, artKey: 'keys', art: null } }));
+    await car.waitForFunction(() => document.querySelector('#media-card [data-np=title]').textContent === 'Music on your phone');
+    await linkPage.evaluate(() => { window.__log.length = 0; });
+    await car.click('#media-card [data-media=toggle]');
+    await linkPage.waitForFunction(() => window.__log.includes('media:toggle'));
+    check(await car.getAttribute('#media-card [data-media=toggle]', 'aria-label') === 'Pause', 'standard phone app: car play button toggles phone music');
 
     // ---------------- Car-Auto Dash (Android stereo app) ----------------
     console.log('Car-Auto Dash (native stereo bridge, simulated)');

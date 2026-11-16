@@ -42,6 +42,22 @@ android {
         }
     }
 
+    // standard: installs from a browser/file manager (no notification access).
+    // full: adds notification access for track title + album art; Play Protect
+    //       blocks that permission for browser installs in some countries, so
+    //       install it with `adb install`. Same package, so full installs over standard.
+    flavorDimensions += "edition"
+    productFlavors {
+        create("standard") {
+            dimension = "edition"
+            isDefault = true
+        }
+        create("full") {
+            dimension = "edition"
+            versionNameSuffix = "-full"
+        }
+    }
+
     buildTypes {
         getByName("release") {
             isMinifyEnabled = false
