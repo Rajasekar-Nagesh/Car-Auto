@@ -213,56 +213,129 @@ ctx.openStereoApp = (name) => {
   return !!app;
 };
 
-// ---- Notifications (messages sent from the phone) ----
+// ---- Notifications & messages ----
+// Messages come from the phone remote ("say"), the trip computer, and — with
+// Car-Auto Link — WhatsApp/SMS/Telegram notifications, which can be answered.
 
 let messages = store.get('messages', []);
+let smsList = [];
 let unread = 0;
+const QUICK_REPLIES = ['On my way', "I'm driving, I'll call you back", 'OK 👍', 'Running a bit late'];
+
 function updateBadge() {
   const badge = $('#msg-badge');
   badge.hidden = !unread;
   badge.textContent = unread;
 }
 
+const replyable = (m) => !!(m && (m.canReply || m.number) && ctx.phoneLink.available());
+
+function msgHtml(m, attr) {
+  const from = m.from || m.name || m.number || '?';
+  return `<div class="msg" ${attr}>
+    <span class="avatar">${escapeHtml(from.charAt(0).toUpperCase())}</span>
+    <div class="meta"><b>${escapeHtml(from)}</b> <span class="muted small">${m.app ? `${escapeHtml(m.app)} · ` : ''}${fmtClock(new Date(m.at || m.date))}</span><p>${escapeHtml(m.text)}</p></div>
+    <button class="btn small" data-act="read">Read</button>
+    ${replyable(m) ? '<button class="btn small primary" data-act="reply">Reply</button>' : ''}
+  </div>`;
+}
+
 function renderMessages() {
   unread = 0;
   updateBadge();
-  $('#message-list').innerHTML = messages.length
-    ? messages.map((m, i) => `
-      <div class="msg">
-        <span class="avatar">${escapeHtml((m.from || '?').charAt(0).toUpperCase())}</span>
-        <div class="meta"><b>${escapeHtml(m.from)}</b> <span class="muted small">${fmtClock(new Date(m.at))}</span><p>${escapeHtml(m.text)}</p></div>
-        <button class="btn small" data-read="${i}">Read</button>
-      </div>`).join('')
-    : '<div class="empty muted">No notifications</div>';
+  $('#btn-load-sms').hidden = !ctx.phoneLink.available();
+  const list = messages.map((m, i) => msgHtml(m, `data-i="${i}"`)).join('') || '<div class="empty muted">No notifications</div>';
+  const sms = smsList.length
+    ? `<div class="tile-label pad">Text messages on your phone</div>${smsList.map((m, i) => msgHtml({ ...m, app: 'SMS' }, `data-sms="${i}"`)).join('')}`
+    : '';
+  $('#message-list').innerHTML = list + sms;
 }
+
 $('#message-list').addEventListener('click', (e) => {
-  const b = e.target.closest('[data-read]');
-  if (b) { const m = messages[+b.dataset.read]; speak(`${m.from} says: ${m.text}`); }
+  const row = e.target.closest('.msg');
+  const act = e.target.closest('[data-act]')?.dataset.act;
+  if (!row || !act) return;
+  const m = row.dataset.sms != null ? { ...smsList[+row.dataset.sms], from: smsList[+row.dataset.sms].name || smsList[+row.dataset.sms].number } : messages[+row.dataset.i];
+  if (act === 'read') speak(`${m.from} says: ${m.text}`);
+  if (act === 'reply') openReply(m);
 });
-$('#btn-clear-msgs').addEventListener('click', () => { messages = []; store.set('messages', messages); renderMessages(); });
+$('#btn-clear-msgs').addEventListener('click', () => { messages = []; smsList = []; store.set('messages', messages); renderMessages(); });
+$('#btn-load-sms').addEventListener('click', () => { ctx.phoneLink.send({ t: 'getSms' }); toast('Loading text messages from your phone…'); });
+bus.on('phone:sms', (items) => { smsList = items || []; if (currentView === 'messages') renderMessages(); });
 
 let huTimer;
 let huMsg = null;
-function showMessage(from, text, { silent = false } = {}) {
-  const m = { from, text, at: Date.now() };
+function showMessage(from, text, { silent = false, app = '', id = null, canReply = false, number = null } = {}) {
+  const m = { from, text, at: Date.now(), app, id, canReply, number };
   messages.unshift(m);
-  messages = messages.slice(0, 30);
-  store.set('messages', messages);
+  messages = messages.slice(0, 40);
+  store.set('messages', messages.map((x) => ({ ...x, canReply: false, id: null }))); // reply links don't survive a restart
   if (currentView === 'messages') renderMessages(); else { unread++; updateBadge(); }
   huMsg = m;
   const box = $('#message-overlay');
-  box.querySelector('.from').textContent = from;
+  box.querySelector('.from').textContent = app ? `${from} · ${app}` : from;
   box.querySelector('.body').textContent = text;
+  box.querySelector('[data-hu=reply]').hidden = !replyable(m);
   box.hidden = false;
-  if (!silent) speak(`Message from ${from}. ${text}`);
+  if (!silent) speak(`${app ? `${app} message` : 'Message'} from ${from}. ${text}`);
   clearTimeout(huTimer);
-  huTimer = setTimeout(() => { box.hidden = true; }, 12000);
+  huTimer = setTimeout(() => { box.hidden = true; }, 15000);
 }
 $('#message-overlay').addEventListener('click', (e) => {
   const act = e.target.closest('[data-hu]')?.dataset.hu;
   if (act === 'read' && huMsg) speak(`${huMsg.from} says: ${huMsg.text}`);
+  else if (act === 'reply' && huMsg) { e.currentTarget.hidden = true; openReply(huMsg); }
   else e.currentTarget.hidden = true;
 });
+
+// ---- Reply sheet: quick replies or dictation ----
+let replyTo = null;
+function openReply(m) {
+  if (!replyable(m)) { toast('Replying needs Car-Auto Link connected on your phone'); return; }
+  replyTo = m;
+  $('#reply-to').textContent = m.from;
+  $('#reply-quick').innerHTML = QUICK_REPLIES.map((q, i) => `<button class="chip" data-q="${i}">${escapeHtml(q)}</button>`).join('');
+  $('#reply-sheet').hidden = false;
+}
+function closeReply() { $('#reply-sheet').hidden = true; }
+function sendReply(m, text) {
+  text = String(text || '').trim();
+  if (!m || !text) return;
+  if (m.id && m.canReply) ctx.phoneLink.send({ t: 'msgReply', id: m.id, text });
+  else if (m.number) ctx.phoneLink.send({ t: 'smsSend', id: 'sms', number: m.number, text });
+  else return toast("This message can't be answered from the car");
+  toast(`Sending to ${m.from}…`);
+}
+$('#reply-quick').addEventListener('click', (e) => {
+  const q = e.target.closest('[data-q]');
+  if (!q) return;
+  sendReply(replyTo, QUICK_REPLIES[+q.dataset.q]);
+  closeReply();
+});
+$('#reply-voice').addEventListener('click', () => {
+  const m = replyTo;
+  closeReply();
+  voice.dictate((text) => {
+    if (!text) return toast("Didn't catch that");
+    sendReply(m, text);
+    ctx.voice(`Sent: ${text}`);
+  });
+});
+$('#reply-cancel').addEventListener('click', closeReply);
+
+ctx.messages = {
+  readLatest() {
+    const recent = messages.filter((m) => m.from).slice(0, 3);
+    if (!recent.length) return ctx.voice('You have no new messages.');
+    ctx.voice(recent.map((m) => `${m.from}${m.app ? ` on ${m.app}` : ''} says: ${m.text}`).join('. '));
+  },
+  replyLatest(text) {
+    const m = messages.find((x) => replyable(x));
+    if (!m) return ctx.voice('There is no message to reply to.');
+    sendReply(m, text);
+    ctx.voice(`Replied to ${m.from}: ${text}`);
+  },
+};
 
 // ---- Phone link ----
 
@@ -358,6 +431,20 @@ function handlePhoneMessage(msg, reply, id) {
       break;
     case 'contacts':
       if (id === nativeLinkId) bus.emit('phone:contacts', msg);
+      break;
+    case 'phoneMsg': {
+      const x = msg.msg || {};
+      if (id === nativeLinkId && x.text) showMessage(x.from || 'Message', x.text, { app: x.app, id: x.id, canReply: !!x.canReply });
+      break;
+    }
+    case 'msgReplyResult':
+      toast(msg.ok ? 'Reply sent ✓' : "Couldn't send the reply from the phone");
+      break;
+    case 'sms':
+      if (id === nativeLinkId) bus.emit('phone:sms', msg.items);
+      break;
+    case 'music':
+      if (id === nativeLinkId) bus.emit('phone:music', msg);
       break;
     case 'recents':
       if (id === nativeLinkId) bus.emit('phone:recents', msg);

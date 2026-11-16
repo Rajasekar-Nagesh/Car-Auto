@@ -51,6 +51,8 @@ export function createMusic(ctx) {
   let current = null;
   let tab = favorites.length ? 'favorites' : 'browse';
   let browseRows = [];
+  let phoneLib = [];
+  let phoneLibPending = null;
   let lastArt = null;
   let lastPlaying = null;
   let listDirty = true;
@@ -304,13 +306,14 @@ export function createMusic(ctx) {
     const star = s.kind === 'radio'
       ? `<button class="icon-btn star ${isFav(s) ? 'on' : ''}" data-fav="${i}" aria-label="Favorite">★</button>` : '';
     return `<div class="track ${playing ? 'playing' : ''}" data-list="${list}" data-i="${i}">
-      <div class="art">${s.art ? `<img src="${escapeHtml(s.art)}" alt="" loading="lazy" onerror="this.remove()">` : (s.kind === 'radio' ? '📻' : '🎵')}</div>
+      <div class="art">${s.art ? `<img src="${escapeHtml(s.art)}" alt="" loading="lazy" onerror="this.remove()">` : (s.kind === 'radio' ? '📻' : s.kind === 'phonelib' ? '📱' : '🎵')}</div>
       <div class="meta"><b>${escapeHtml(s.name)}</b><span class="muted">${escapeHtml(s.sub || '')}</span></div>
       ${star}
     </div>`;
   }
 
   function listFor(name) {
+    if (name === 'phone') return phoneLib;
     return name === 'favorites' ? favorites : name === 'files' ? localFiles : browseRows;
   }
 
@@ -321,6 +324,11 @@ export function createMusic(ctx) {
 
   function renderList() {
     const list = listFor(tab);
+    if (tab === 'phone' && !list.length) {
+      el.list.innerHTML = `<div class="empty"><p>${ctx.phoneLink?.available() ? 'Loading songs from your phone…' : 'Connect Car-Auto Link on your phone to play its music.'}</p>
+        <p class="muted small">In Car-Auto Link, allow <b>Music and audio</b>.</p></div>`;
+      return;
+    }
     if (tab === 'files' && !list.length) {
       el.list.innerHTML = `<div class="empty"><p>Play music stored on this stereo or a USB drive.</p>
         <label class="btn primary big" for="file-input">Choose music files</label>
@@ -376,6 +384,13 @@ export function createMusic(ctx) {
     if (!row) return;
     const list = listFor(row.dataset.list);
     if (fav) return toggleFav(list[+fav.dataset.fav]);
+    if (row.dataset.list === 'phone') {
+      // Played by the phone itself; its sound reaches the car over Bluetooth.
+      if (!audio.paused) audio.pause();
+      source = 'phone';
+      ctx.phoneLink?.send({ t: 'playMusic', ids: phoneLib.map((s) => s.id), index: +row.dataset.i });
+      return;
+    }
     play(list, +row.dataset.i);
   });
 
@@ -383,7 +398,10 @@ export function createMusic(ctx) {
     tab = b.dataset.tab;
     renderTabs();
     if (tab === 'browse' && !browseRows.length) loadBrowse();
-    else renderList();
+    else {
+      if (tab === 'phone' && !phoneLib.length && ctx.phoneLink?.available()) ctx.phoneLink.send({ t: 'getMusic' });
+      renderList();
+    }
   }));
 
   el.searchForm.addEventListener('submit', (e) => {
@@ -396,6 +414,20 @@ export function createMusic(ctx) {
     const b = e.target.closest('[data-media]');
     if (b) { ({ toggle, next, prev }[b.dataset.media])?.(); return; }
     if (e.target.closest('#media-card')) ctx.showView('music');
+  });
+
+  ctx.bus.on('phone:music', (m) => {
+    if (m.page === 0) phoneLibPending = [];
+    phoneLibPending = (phoneLibPending || []).concat(m.items || []);
+    if (m.page >= m.pages - 1) {
+      phoneLib = phoneLibPending.map((x) => ({ kind: 'phonelib', id: x.id, name: x.title, sub: x.artist || 'Phone', url: `phone:${x.id}` }));
+      phoneLibPending = null;
+      if (tab === 'phone') renderList();
+    }
+  });
+  ctx.bus.on('phone:linked', (on) => {
+    el.tabs.forEach((b) => { if (b.dataset.tab === 'phone') b.hidden = !on; });
+    if (!on) { phoneLib = []; if (tab === 'phone') { tab = 'favorites'; renderTabs(); renderList(); } }
   });
 
   el.volume.value = Math.round(audio.volume * 100);

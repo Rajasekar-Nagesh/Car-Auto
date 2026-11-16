@@ -519,3 +519,8 @@ body.in-call .map-top { margin-top: 84px; }
 .icon-btn.small { min-width: 40px; min-height: 40px; font-size: 1rem; }
 @media (max-height: 560px) { .trip-card { padding: 10px 14px; } .trip-stat b { font-size: 1rem; } }
 @media (max-aspect-ratio: 1/1) { .side-cards { grid-template-columns: 1fr; grid-template-rows: auto; } }
+
+/* Reply sheet */
+.reply-sheet { align-items: stretch; gap: 14px; font-size: 1.1rem; }
+.reply-sheet .chips { gap: 10px; }
+.reply-sheet .row { justify-content: flex-end; }

@@ -67,6 +67,7 @@ class LinkService : Service() {
         PhoneHub.listener = null
         PhoneHub.stopMedia()
         PhoneHub.stopCalls(this)
+        PhonePlayer.stop()
         web?.destroy()
         web = null
         wakeLock?.let { if (it.isHeld) it.release() }
@@ -174,6 +175,23 @@ class LinkService : Service() {
 
         @JavascriptInterface
         fun getRecents(): String = PhoneHub.recents(ctx).toString()
+
+        @JavascriptInterface
+        fun replyMessage(id: String, text: String): Boolean = Messages.reply(ctx, id, text)
+
+        @JavascriptInterface
+        fun getSms(): String = Messages.recentSms(ctx).toString()
+
+        @JavascriptInterface
+        fun sendSms(number: String, text: String): Boolean = Messages.sendSms(ctx, number, text)
+
+        @JavascriptInterface
+        fun getMusic(): String = PhonePlayer.library(ctx).toString()
+
+        @JavascriptInterface
+        fun playMusic(idsJson: String, index: Int) {
+            main.post { PhonePlayer.play(ctx, idsJson, index) }
+        }
 
         @JavascriptInterface
         fun onStatus(state: String, message: String) {

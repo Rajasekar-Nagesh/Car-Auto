@@ -18,5 +18,6 @@ class NotifListener : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val n = sbn.notification ?: return
         if (n.category == Notification.CATEGORY_CALL) PhoneHub.onCallNotification(n)
+        else if (LinkService.running) Messages.onNotification(applicationContext, sbn)
     }
 }

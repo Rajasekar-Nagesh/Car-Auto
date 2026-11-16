@@ -132,8 +132,12 @@ object PhoneHub {
     }
 
     /** Current track, or null. Album art is included only when it changed (or [forceArt]). */
+    /** Re-send the current media state (e.g. when our own phone-music player stops). */
+    fun refreshMedia() = schedulePush()
+
     @Synchronized
     fun mediaJson(ctx: Context, forceArt: Boolean): JSONObject? {
+        PhonePlayer.json()?.let { return it }
         val c = controller ?: return null
         val md = c.metadata ?: return null
         val title = md.getString(MediaMetadata.METADATA_KEY_TITLE)
@@ -186,6 +190,8 @@ object PhoneHub {
         return "data:image/jpeg;base64," + Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
     }
 
+    fun appName(ctx: Context, pkg: String): String = appLabel(ctx, pkg)
+
     private fun appLabel(ctx: Context, pkg: String): String = try {
         val pm = ctx.packageManager
         pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
@@ -194,6 +200,7 @@ object PhoneHub {
     }
 
     fun mediaCmd(ctx: Context, cmd: String) {
+        if (PhonePlayer.cmd(cmd)) return
         val c = controller
         if (c == null) {
             // No active session: a play key resumes the last music app.
