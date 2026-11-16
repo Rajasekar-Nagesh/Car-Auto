@@ -2,7 +2,7 @@
 // dashboard opens instantly, even without signal. Map tiles are cached as you drive (up to a limit) so
 // recently seen areas still show when coverage drops.
 
-const VERSION = 'v4';
+const VERSION = 'v5';
 const SHELL = `carauto-shell-${VERSION}`;
 const TILES = 'carauto-tiles';
 const MAX_TILES = 1500;
@@ -59,6 +59,9 @@ self.addEventListener('fetch', (e) => {
 
   // App files: served instantly from cache, refreshed in the background
   // (stale-while-revalidate). The next launch picks up any update.
+  // App downloads (APKs) must always come fresh from the network, never from the cache.
+  if (url.pathname.includes('/apk/') || url.pathname.endsWith('.apk')) return;
+
   if (url.origin === self.location.origin) {
     e.respondWith(
       caches.open(SHELL).then(async (cache) => {
