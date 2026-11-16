@@ -39,7 +39,8 @@ jobs:
           mkdir -p _site/apk
           cp -r index.html car.html phone.html sw.js manifest-*.webmanifest css js vendor icons _site/
           cp android/dash/build/outputs/apk/release/dash-release.apk _site/apk/car-auto-dash.apk
-          cp android/link/build/outputs/apk/release/link-release.apk _site/apk/car-auto-link.apk
+          cp android/link/build/outputs/apk/standard/release/link-standard-release.apk _site/apk/car-auto-link.apk
+          cp android/link/build/outputs/apk/full/release/link-full-release.apk _site/apk/car-auto-link-full.apk
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

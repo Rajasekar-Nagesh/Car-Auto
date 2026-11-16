@@ -34,7 +34,8 @@ jobs:
         run: |
           mkdir -p apk
           cp android/dash/build/outputs/apk/release/dash-release.apk apk/car-auto-dash.apk
-          cp android/link/build/outputs/apk/release/link-release.apk apk/car-auto-link.apk
+          cp android/link/build/outputs/apk/standard/release/link-standard-release.apk apk/car-auto-link.apk
+          cp android/link/build/outputs/apk/full/release/link-full-release.apk apk/car-auto-link-full.apk
       - name: Check APKs (signature, Android versions)
         run: |
           BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)

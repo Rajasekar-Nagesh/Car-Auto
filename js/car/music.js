@@ -101,7 +101,16 @@ export function createMusic(ctx) {
   const phoneActive = () => source === 'phone' && phoneMedia && ctx.phoneLink?.available();
 
   function toggle() {
-    if (phoneActive()) return phoneCmd(phoneMedia.playing ? 'pause' : 'play');
+    if (phoneActive()) {
+      if (phoneMedia.keysOnly) {
+        // Standard phone app: no track info, so toggle and track the state here.
+        phoneCmd('toggle');
+        phoneMedia.playing = !phoneMedia.playing;
+        render();
+        return;
+      }
+      return phoneCmd(phoneMedia.playing ? 'pause' : 'play');
+    }
     localToggle();
   }
 
@@ -156,7 +165,7 @@ export function createMusic(ctx) {
       return {
         kind: 'phone',
         name: phoneMedia.title,
-        sub: [phoneMedia.artist, phoneMedia.app].filter(Boolean).join(' · '),
+        sub: phoneMedia.keysOnly ? 'Play, pause and skip from here' : [phoneMedia.artist, phoneMedia.app].filter(Boolean).join(' · '),
         art: phoneMedia.art || '',
         playing: !!phoneMedia.playing,
       };

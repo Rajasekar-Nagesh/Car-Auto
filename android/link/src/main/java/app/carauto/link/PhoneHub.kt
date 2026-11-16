@@ -65,7 +65,7 @@ object PhoneHub {
             val ctx = appContext
             val msm = sessionManager
             if (ctx != null && msm != null && state?.state != PlaybackState.STATE_PLAYING) {
-                runCatching { pick(msm.getActiveSessions(ComponentName(ctx, NotifListener::class.java))) }
+                runCatching { pick(msm.getActiveSessions(listenerComponent(ctx))) }
             }
             schedulePush()
         }
@@ -75,12 +75,27 @@ object PhoneHub {
         }
     }
 
+    /** Only exists in the full edition; referenced by name so the standard edition compiles without it. */
+    private fun listenerComponent(ctx: Context) = ComponentName(ctx.packageName, "app.carauto.link.NotifListener")
+
+    /** Standard edition (or no notification access): the car can still control playback with media keys. */
+    fun keysOnlyMedia(): JSONObject = JSONObject()
+        .put("title", "Music on your phone")
+        .put("artist", "")
+        .put("app", "Phone")
+        .put("playing", false)
+        .put("duration", 0)
+        .put("keysOnly", true)
+        .put("artKey", "keys")
+        .put("art", JSONObject.NULL)
+
     fun startMedia(ctx: Context) {
         val app = ctx.applicationContext
         appContext = app
         val msm = app.getSystemService(MediaSessionManager::class.java) ?: return
         sessionManager = msm
-        val component = ComponentName(app, NotifListener::class.java)
+        if (!Edition.FULL) return
+        val component = listenerComponent(app)
         try {
             msm.removeOnActiveSessionsChangedListener(sessionsListener)
             msm.addOnActiveSessionsChangedListener(sessionsListener, component, main)
@@ -182,7 +197,16 @@ object PhoneHub {
         val c = controller
         if (c == null) {
             // No active session: a play key resumes the last music app.
-            if (cmd == "play" || cmd == "toggle") sendMediaKey(ctx, KeyEvent.KEYCODE_MEDIA_PLAY)
+            sendMediaKey(
+                ctx,
+                when (cmd) {
+                    "play" -> KeyEvent.KEYCODE_MEDIA_PLAY
+                    "pause" -> KeyEvent.KEYCODE_MEDIA_PAUSE
+                    "next" -> KeyEvent.KEYCODE_MEDIA_NEXT
+                    "prev" -> KeyEvent.KEYCODE_MEDIA_PREVIOUS
+                    else -> KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+                },
+            )
             return
         }
         val t = c.transportControls
