@@ -113,14 +113,14 @@ Every push also runs **Build Android apps**, and its run page has the two APKs u
 **Android: Car-Auto Link (music, calls, contacts)**
 
 1. On the phone, open `…/apk/car-auto-link.apk` and install it.
-2. On the stereo, open **Settings → Pair your phone**. Enter the code in Car-Auto Link and tap **Connect**. Or scan the QR code with the camera and tap **Open in app**.
+2. On the stereo, open **Settings → Pair your phone**. In Car-Auto Link tap **Scan QR code** and point it at the stereo screen. It connects straight away. You can also type the code and tap **Connect**.
 3. In Car-Auto Link, tap each **Allow** button:
    * **Notification access**: needed to see and control music from other apps and to show caller names.
    * **Phone, contacts & call log**: incoming call screen, answer/decline, contacts, recents.
    * **Keep running in the background**: stops Android from closing the link while you drive.
 4. Under **Start automatically**, choose your car stereo's Bluetooth name. From then on the link starts by itself when you get in the car and stops when you leave.
 
-**iPhone (or Android without the app):** scan the QR code with the camera to open the web remote, then use Share → **Add to Home Screen**. It sends destinations and messages, controls the car's radio and shares GPS. Apple doesn't allow apps to read other apps' music or calls, so those features are Android only.
+**iPhone (or Android without the app):** this needs the web version hosted somewhere (GitHub Pages, Netlify…). If you use the stereo app, enter that address under **Settings → Advanced → Web address** so the QR code points to it. Then scan the QR code with the camera to open the web remote, then use Share → **Add to Home Screen**. It sends destinations and messages, controls the car's radio and shares GPS. Apple doesn't allow apps to read other apps' music or calls, so those features are Android only.
 
 ## Voice commands
 

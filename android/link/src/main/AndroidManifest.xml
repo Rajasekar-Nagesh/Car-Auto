@@ -41,6 +41,11 @@
         android:label="Car-Auto Link"
         android:theme="@android:style/Theme.Material">
 
+        <!-- Download the QR scanner module with the app instead of on first use. -->
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="barcode_ui" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

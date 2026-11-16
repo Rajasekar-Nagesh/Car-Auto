@@ -68,13 +68,31 @@ class MainActivity : Activity() {
         super.onPause()
     }
 
-    /** carauto://pair?code=ABCD-1234[&srv=...] from the "Open in app" button on the web remote. */
+    /** carauto://pair?code=ABCD-1234[&srv=...] from the car's QR code or the web remote's "Open in app" button. */
     private fun handleIntent(intent: Intent?) {
         val data = intent?.data ?: return
         if (data.scheme != "carauto") return
-        val code = Prefs.normalizeCode(data.getQueryParameter("code")) ?: return
-        Prefs.setServer(this, data.getQueryParameter("srv"))
-        connect(code)
+        val pairing = Prefs.parsePairing(data.toString()) ?: return
+        Prefs.setServer(this, pairing.server)
+        connect(pairing.code)
+    }
+
+    private fun scanQr() {
+        QrScanner.scan(
+            this,
+            onResult = { raw ->
+                val pairing = Prefs.parsePairing(raw)
+                if (pairing == null) {
+                    Toast.makeText(this, "That isn't a Car-Auto pairing code", Toast.LENGTH_LONG).show()
+                } else {
+                    Prefs.setServer(this, pairing.server)
+                    connect(pairing.code)
+                }
+            },
+            onError = {
+                Toast.makeText(this, "Couldn't open the scanner. Type the code instead.", Toast.LENGTH_LONG).show()
+            },
+        )
     }
 
     private fun connect(code: String) {
@@ -121,7 +139,8 @@ class MainActivity : Activity() {
         root.addView(status)
 
         section("1. Pair with your car", root)
-        root.addView(text("On the car screen open Settings → Pair your phone, then enter the code shown there.", 14f, color = muted))
+        root.addView(text("On the car screen open Settings → Pair your phone, then scan the QR code or type the code shown there.", 14f, color = muted))
+        root.addView(button("📷  Scan QR code") { scanQr() }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         codeInput = EditText(this).apply {
             hint = "ABCD-1234"
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS

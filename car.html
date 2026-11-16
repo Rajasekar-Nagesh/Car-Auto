@@ -251,7 +251,7 @@
           <div class="pair">
             <div id="pair-qr" class="qr"></div>
             <div>
-              <p>Scan with your phone camera (Android or iPhone) to open the Car-Auto remote.</p>
+              <p id="pair-help">Scan with your phone camera (Android or iPhone) to open the Car-Auto remote.</p>
               <p class="muted">Or enter this code in the remote:</p>
               <div class="pair-code" id="pair-code">----</div>
               <p id="pair-status" class="muted">Starting…</p>
@@ -319,6 +319,10 @@
 
         <div class="card">
           <h3>Advanced</h3>
+          <label class="field">Web address (optional)
+            <input id="set-webaddress" placeholder="https://your-site.netlify.app/" inputmode="url">
+          </label>
+          <p class="muted small">Where the web version is hosted (GitHub Pages, Netlify…). The pairing QR code then works for iPhones too.</p>
           <label class="field">Own pairing server (optional)
             <input id="set-server" placeholder="https://your-peerjs-server:443/" inputmode="url">
           </label>

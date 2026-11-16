@@ -20,6 +20,36 @@ object Prefs {
     fun shareGps(ctx: Context): Boolean = p(ctx).getBoolean("gps", false)
     fun setShareGps(ctx: Context, on: Boolean) = p(ctx).edit().putBoolean("gps", on).apply()
 
+    /** Pairing code + optional server, read from a scanned QR code or link. */
+    data class Pairing(val code: String, val server: String?)
+
+    /**
+     * Understands every form the car shows or links to:
+     *  - carauto://pair?code=ABCD-1234&srv=...
+     *  - https://.../phone.html#pair=ABCD-1234&srv=...
+     *  - a bare code "ABCD-1234"
+     */
+    fun parsePairing(raw: String?): Pairing? {
+        val text = raw?.trim().orEmpty()
+        if (text.isEmpty()) return null
+        if (text.startsWith("carauto:", ignoreCase = true)) {
+            val query = text.substringAfter('?', "")
+            val params = splitParams(query)
+            return normalizeCode(params["code"])?.let { Pairing(it, params["srv"]) }
+        }
+        val fragment = text.substringAfter('#', "")
+        if (fragment.isNotEmpty()) {
+            val params = splitParams(fragment)
+            normalizeCode(params["pair"])?.let { return Pairing(it, params["srv"]) }
+        }
+        return normalizeCode(text)?.let { Pairing(it, null) }
+    }
+
+    private fun splitParams(s: String): Map<String, String> = s.split('&').mapNotNull { part ->
+        val i = part.indexOf('=')
+        if (i <= 0) null else part.substring(0, i) to java.net.URLDecoder.decode(part.substring(i + 1), "UTF-8")
+    }.toMap()
+
     /** Accepts "abcd1234", "ABCD-1234" etc. Returns "ABCD-1234" or null. */
     fun normalizeCode(raw: String?): String? {
         val c = raw.orEmpty().uppercase().filter { it.isLetterOrDigit() }

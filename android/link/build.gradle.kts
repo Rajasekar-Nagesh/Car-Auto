@@ -63,3 +63,8 @@ android {
         checkReleaseBuilds = false
     }
 }
+
+dependencies {
+    // Google's ready-made QR scanner (no camera permission, UI from Play services).
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
+}

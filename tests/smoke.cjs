@@ -380,6 +380,14 @@ async function mockNetwork(context) {
     await dash.click('.taskbar [data-view=apps]');
     await dash.click('[data-open=settings]');
     check(await dash.isVisible('#native-card') && await dash.isVisible('#btn-overlay') && !(await dash.isVisible('#get-app-card')), 'native settings (auto-start, home screen) shown in the app');
+    await dash.waitForSelector('#pair-qr svg');
+    check((await dash.textContent('#pair-url')).startsWith('carauto://pair?code='), 'stereo app QR opens Car-Auto Link (carauto:// link)');
+    check((await dash.textContent('#pair-help')).includes('Scan QR code'), 'pairing help tells you to scan in Car-Auto Link');
+    await dash.fill('#set-webaddress', 'https://my-car.netlify.app');
+    await dash.press('#set-webaddress', 'Enter');
+    await dash.locator('#set-webaddress').blur();
+    await dash.waitForFunction(() => document.querySelector('#pair-url').textContent.startsWith('https://my-car.netlify.app/phone.html'));
+    check(true, 'with a web address set, the QR code uses it (works for iPhones)');
     await dash.click('#set-autostart');
     check((await dash.evaluate(() => window.__log)).includes('autostart:false'), 'auto-start toggle reaches the app');
     await dashCtx.close();

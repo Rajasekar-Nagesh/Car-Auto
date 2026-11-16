@@ -30,6 +30,7 @@ const DEFAULTS = {
   home: null,
   work: null,
   peerServer: null,
+  webAddress: '',
 };
 
 const settings = { ...DEFAULTS, ...store.get('settings', {}) };
@@ -270,13 +271,36 @@ if (!code) { code = genPairCode(); store.set('pairCode', code); }
 let host = null;
 let linkState = 'offline';
 
+// What the pairing QR code contains:
+// - a hosted web address (browser version, or "Web address" set in Advanced):
+//   phones open the web remote, and Car-Auto Link can scan it too;
+// - otherwise (stereo app with no hosting): a carauto:// link that opens the
+//   Car-Auto Link phone app directly.
+function webBase() {
+  if (settings.webAddress) return settings.webAddress;
+  return native ? null : location.href;
+}
+
 function phoneUrl() {
-  const u = new URL('phone.html', location.href);
+  const srv = settings.peerServer?.host ? btoa(JSON.stringify(settings.peerServer)) : null;
+  const base = webBase();
+  if (!base) {
+    const p = new URLSearchParams({ code });
+    if (srv) p.set('srv', srv);
+    return `carauto://pair?${p}`;
+  }
+  const u = new URL('phone.html', base);
   if (transportFromUrl() === 'local') u.searchParams.set('transport', 'local');
   const hash = new URLSearchParams({ pair: code });
-  if (settings.peerServer?.host) hash.set('srv', btoa(JSON.stringify(settings.peerServer)));
+  if (srv) hash.set('srv', srv);
   u.hash = hash.toString();
   return u.toString();
+}
+
+function pairHelpText() {
+  return webBase()
+    ? 'Scan with your phone camera (Android or iPhone) to open the remote. In Car-Auto Link, tap <b>Scan QR code</b>.'
+    : 'On your Android phone, open <b>Car-Auto Link</b> and tap <b>Scan QR code</b>. For iPhones, set a <b>Web address</b> under Advanced.';
 }
 
 function startLink() {
@@ -376,6 +400,7 @@ function handlePhoneMessage(msg, reply, id) {
 
 async function renderPairing() {
   $('#pair-code').textContent = code;
+  $('#pair-help').innerHTML = pairHelpText();
   const url = phoneUrl();
   $('#pair-url').textContent = url;
   try {
@@ -456,6 +481,27 @@ $$('.place').forEach((row) => {
   });
 });
 renderPlaces();
+
+const webInput = $('#set-webaddress');
+webInput.value = settings.webAddress || '';
+webInput.addEventListener('change', () => {
+  const v = webInput.value.trim();
+  if (v) {
+    try {
+      const u = new URL(v);
+      if (u.protocol !== 'https:') throw new Error('https');
+      settings.webAddress = u.href.endsWith('/') || u.pathname.endsWith('.html') ? u.href : `${u.href}/`;
+    } catch {
+      toast('Enter the full https:// address where the web version is hosted');
+      return;
+    }
+  } else {
+    settings.webAddress = '';
+  }
+  webInput.value = settings.webAddress;
+  saveSettings();
+  renderPairing();
+});
 
 const srvInput = $('#set-server');
 srvInput.value = settings.peerServer ? `${settings.peerServer.secure === false ? 'http' : 'https'}://${settings.peerServer.host}:${settings.peerServer.port}${settings.peerServer.path || '/'}` : '';
