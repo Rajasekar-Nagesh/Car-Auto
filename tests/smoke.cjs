@@ -52,6 +52,7 @@ function check(cond, msg) {
 
 async function mockNetwork(context) {
   await context.route(/tile\.openstreetmap\.org/, (r) => r.fulfill({ body: PNG, contentType: 'image/png' }));
+  await context.route(/tiles\.openfreemap\.org/, (r) => r.fulfill({ json: { version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#e8eaed' } }] } }));
   await context.route(/nominatim\.openstreetmap\.org/, (r) => r.fulfill({ json: NOMINATIM }));
   await context.route(/router\.project-osrm\.org/, (r) => r.fulfill({ json: OSRM }));
   await context.route(/api\.open-meteo\.com/, (r) => r.fulfill({ json: { current: { temperature_2m: 27.4, weather_code: 1 } } }));
@@ -182,6 +183,19 @@ async function mockNetwork(context) {
     check(/^(80|90|100) m$/.test(d1.trim()), `distance to turn updates from phone GPS (${d1.trim()})`);
     await car.screenshot({ path: `${SHOTS}/car-navigating.png` });
     check(await car.locator('#tile-nav .step').count() >= 1, 'dashboard card lists upcoming turns');
+    const mapInfo = await car.evaluate(() => { const v = window.carauto.ctx.nav.map; return { kind: v.kind, bearing: v.getBearing(), pitch: v.raw.getPitch ? v.raw.getPitch() : 0 }; });
+    check(mapInfo.kind === 'vector', `vector map in use (${mapInfo.kind})`);
+    check(await car.isVisible('#btn-compass'), 'compass button shown');
+    await send(12.9737, 77.5946);
+    await car.waitForTimeout(1400);
+    const hu = await car.evaluate(() => { const v = window.carauto.ctx.nav.map; return { pitch: v.raw.getPitch(), bearing: v.getBearing() }; });
+    check(hu.pitch > 30, `heading-up navigation tilts and follows the car (pitch ${Math.round(hu.pitch)}°)`);
+    await car.click('#btn-compass');
+    await car.waitForTimeout(600);
+    check(Math.round(await car.evaluate(() => window.carauto.ctx.nav.map.getBearing())) === 0, 'compass switches to north-up');
+    await car.click('#btn-compass');
+    await car.evaluate(() => window.carauto.ctx.nav.map.raw.setBearing(35));
+    check(Math.round(await car.evaluate(() => window.carauto.ctx.nav.map.getBearing())) === 35, 'map can be rotated');
     await car.click('#btn-expand');
     await car.waitForTimeout(200);
     await car.screenshot({ path: `${SHOTS}/car-map-full.png` });
@@ -474,6 +488,16 @@ async function mockNetwork(context) {
     check(btVoice === 'bluetooth', 'voice: "play bluetooth"');
     check((await dash.evaluate(() => window.__log)).includes('autostart:false'), 'auto-start toggle reaches the app');
     await dashCtx.close();
+
+    // Fallback map for stereos without WebGL
+    const rasterCtx = await browser.newContext({ viewport: { width: 1280, height: 720 }, serviceWorkers: 'block' });
+    await mockNetwork(rasterCtx);
+    const raster = await rasterCtx.newPage();
+    raster.on('pageerror', (e) => errors.push(`raster: ${e.message}`));
+    await raster.goto(`${BASE}/car.html?transport=local&map=raster`);
+    await raster.waitForFunction(() => window.carauto?.ctx?.nav);
+    check(await raster.evaluate(() => window.carauto.ctx.nav.map.kind) === 'raster' && !(await raster.isVisible('#btn-compass')), 'raster fallback map works (no compass)');
+    await rasterCtx.close();
 
     // Unpaired phone view
     const fresh = await browser.newPage({ viewport: { width: 390, height: 844 } });

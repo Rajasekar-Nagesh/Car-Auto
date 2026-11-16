@@ -82,7 +82,7 @@ How it works without a car connection: the stereo turns on with the ignition, so
 
 * The stereo and phone connect directly over WebRTC. Pairing uses an 8-character code. The free public PeerJS server only introduces the two devices; you can run your own (see *Advanced*). Both devices need internet: turn on your phone's hotspot and connect the stereo to it.
 * **Sound still travels over Bluetooth**, exactly as it does today. Car-Auto adds the screen, the controls and the call handling.
-* Maps from OpenStreetMap, routes from OSRM, search from Nominatim, radio from radio-browser.info, weather from Open-Meteo. All free, no API keys.
+* Maps: vector maps from OpenFreeMap (OpenStreetMap data) drawn with MapLibre: rotate with two fingers, tilt, heading-up while navigating, place names at every zoom; stereos without WebGL fall back to OpenStreetMap image tiles. Routes from OSRM, search from Nominatim, radio from radio-browser.info, weather from Open-Meteo. All free, no API keys.
 
 ## 1. Publish it (one time, about 10 minutes)
 

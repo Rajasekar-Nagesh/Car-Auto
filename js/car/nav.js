@@ -5,6 +5,7 @@ import {
   $, store, toast, speak, fetchJSON, haversine, bearing, fmtDist, sayDist,
   fmtDuration, fmtClock, escapeHtml, searchPlaces, openExternal,
 } from '../common.js';
+import { createMapView } from './mapview.js';
 
 const OSRM = 'https://router.project-osrm.org/route/v1/driving';
 const OFF_ROUTE_M = 60;
@@ -144,41 +145,14 @@ export function locateOnRoute(route, pos, hint = 0) {
 // ---- Module ------------------------------------------------------------
 
 export function createNav(ctx) {
-  const L = window.L;
   const { settings } = ctx;
   const last = store.get('lastPos', null);
-  // Canvas renderer + no tile fade: far less DOM work on slow head units.
-  const map = L.map('map', {
-    zoomControl: false,
-    attributionControl: true,
-    preferCanvas: true,
-    fadeAnimation: false,
-    zoomSnap: 0.5,
-    inertia: true,
-    tapTolerance: 20,
-  }).setView(last ? [last.lat, last.lon] : [20, 0], last ? 16 : 2);
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    keepBuffer: 4,
-    updateWhenIdle: false,
-    updateWhenZooming: false,
-    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-  }).addTo(map);
-
-  const carIcon = L.divIcon({
-    className: 'car-marker',
-    html: '<div class="car-arrow"><svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="22" fill="#fff" opacity=".18"/><path d="M24 6 39 40 24 32 9 40Z" fill="#4c8df6" stroke="#fff" stroke-width="3" stroke-linejoin="round"/></svg></div>',
-    iconSize: [48, 48],
-    iconAnchor: [24, 24],
-  });
-  let carMarker = null;
-  let routeLine = null;
-  let routeCasing = null;
-  let doneLine = null;
-  let destMarker = null;
-  let previewLine = null;
-  const ROUTE_STYLE = { color: '#4c8df6', weight: 8, opacity: 1, lineCap: 'round', lineJoin: 'round' };
-  const CASING_STYLE = { color: '#1a4fa8', weight: 12, opacity: 1, lineCap: 'round', lineJoin: 'round' };
+  const mapEl = document.getElementById('map');
+  const view = createMapView(mapEl, { center: last ? [last.lat, last.lon] : [20, 0], zoom: last ? 16 : 2 });
+  document.body.classList.toggle('map-vector', view.kind === 'vector');
+  // Heading-up (map turns with the car) while navigating, like Android Auto.
+  let headingUp = store.get('headingUp', true);
+  let camBearing = 0;
 
   let pos = null;
   let follow = true;
@@ -215,12 +189,32 @@ export function createNav(ctx) {
 
   // ---- Positioning ----
 
-  map.on('dragstart', () => { follow = false; el.recenter.hidden = false; });
+  view.on('userpan', () => { follow = false; el.recenter.hidden = false; });
   el.recenter.addEventListener('click', () => {
     follow = true;
     el.recenter.hidden = true;
-    if (pos) map.setView([pos.lat, pos.lon], Math.max(map.getZoom(), 16));
+    if (pos) view.follow([pos.lat, pos.lon], { zoom: Math.max(view.getZoom(), 16) });
   });
+
+  // Compass: shows north; tap to switch heading-up / north-up (or reset rotation).
+  const compass = $('#btn-compass');
+  compass.hidden = !view.canRotate;
+  const needle = compass.querySelector('svg');
+  view.on('rotate', (b) => { needle.style.transform = `rotate(${-b}deg)`; });
+  compass.addEventListener('click', () => {
+    if (route) {
+      headingUp = !headingUp;
+      store.set('headingUp', headingUp);
+      toast(headingUp ? 'Heading up: the map turns with the car' : 'North up');
+      if (!headingUp) view.resetNorth();
+      follow = true;
+      el.recenter.hidden = true;
+    } else {
+      view.resetNorth();
+    }
+  });
+  const headingUpActive = () => view.canRotate && headingUp && !!route && follow;
+  const lerpAngle = (a, b, k) => a + ((((b - a) % 360) + 540) % 360 - 180) * k;
 
   function ingest(fix, source) {
     if (sim && source !== 'sim') return;
@@ -268,7 +262,6 @@ export function createNav(ctx) {
   let shown = null;
   let animFrame = 0;
   let lastFixAt = 0;
-  let arrowEl = null;
   let lastHeading = null;
   let rotation = 0;
   function glideTo(target) {
@@ -283,10 +276,16 @@ export function createNav(ctx) {
     const frame = (t) => {
       const k = dur ? Math.min(1, (t - t0) / dur) : 1;
       shown = [from[0] + (target[0] - from[0]) * k, from[1] + (target[1] - from[1]) * k];
-      carMarker.setLatLng(shown);
+      view.setCar(shown, rotation);
       if (follow && ctx.mapVisible()) {
-        if (map.getZoom() < 14) map.setView(shown, 16, { animate: false });
-        else map.panTo(shown, { animate: false, noMoveStart: true });
+        const zoom = view.getZoom() < 14 ? 16 : null;
+        if (headingUpActive()) {
+          camBearing = lerpAngle(camBearing, pos?.heading || 0, 0.12);
+          // car sits low on screen with the road ahead visible, tilted
+          view.follow(shown, { zoom, bearing: camBearing, pitch: 45, offsetY: mapEl.clientHeight * 0.35 });
+        } else {
+          view.follow(shown, { zoom });
+        }
       }
       if (k < 1) animFrame = requestAnimationFrame(frame);
     };
@@ -297,18 +296,13 @@ export function createNav(ctx) {
   let lastSpeedText = '';
   function onPosition() {
     const ll = [pos.lat, pos.lon];
-    if (!carMarker) {
-      carMarker = L.marker(ll, { icon: carIcon, interactive: false, zIndexOffset: 1000, keyboard: false }).addTo(map);
-      arrowEl = carMarker.getElement()?.querySelector('.car-arrow');
-    }
-    glideTo(ll);
     const heading = Math.round(pos.heading || 0);
-    if (arrowEl && heading !== lastHeading) {
+    if (heading !== lastHeading) {
       // accumulate rotation so 359°→1° turns 2°, not a full spin
       rotation = lastHeading == null ? heading : rotation + ((heading - lastHeading + 540) % 360) - 180;
       lastHeading = heading;
-      arrowEl.style.transform = `rotate(${rotation}deg)`;
     }
+    glideTo(ll);
     const st = ctx.speedText(pos.speed);
     if (st !== lastSpeedText) { lastSpeedText = st; el.speedVal.textContent = st; }
     if (Date.now() - lastSave > 30000) {
@@ -336,8 +330,8 @@ export function createNav(ctx) {
   function startPoint() {
     if (pos) return pos;
     if (settings.demo) {
-      const c = map.getCenter();
-      ingest({ lat: c.lat, lon: c.lng, speed: 0, time: Date.now() }, sim ? 'sim' : settings.gpsSource === 'phone' ? 'phone' : 'device');
+      const [clat, clon] = view.getCenter();
+      ingest({ lat: clat, lon: clon, speed: 0, time: Date.now() }, sim ? 'sim' : settings.gpsSource === 'phone' ? 'phone' : 'device');
       return pos;
     }
     return null;
@@ -358,13 +352,11 @@ export function createNav(ctx) {
       el.previewCard.innerHTML = `<div class="pv-title">${escapeHtml(dest.name || dest.label)}</div><div class="bad">Couldn't get a route: ${escapeHtml(e.message)}</div><div class="row"><button class="btn" data-act="cancel">Close</button></div>`;
       return;
     }
-    previewLine?.remove();
-    previewLine = L.polyline(preview.coords, { ...ROUTE_STYLE, opacity: 0.85 }).addTo(map);
-    destMarker?.remove();
-    destMarker = L.marker([dest.lat, dest.lon]).addTo(map);
+    view.setPreview(preview.coords);
+    view.setDest([dest.lat, dest.lon]);
     follow = false;
     el.recenter.hidden = false;
-    map.fitBounds(previewLine.getBounds(), { padding: [60, 60] });
+    view.fitCoords(preview.coords, 70);
     const arrive = new Date(Date.now() + preview.duration * 1000);
     el.previewCard.innerHTML = `
       <div class="pv-title">${escapeHtml(dest.name || dest.label)}</div>
@@ -391,9 +383,8 @@ export function createNav(ctx) {
 
   function clearPreview() {
     preview = null;
-    previewLine?.remove();
-    previewLine = null;
-    if (!route) { destMarker?.remove(); destMarker = null; }
+    view.setPreview(null);
+    if (!route) view.setDest(null);
     el.previewCard.hidden = true;
   }
 
@@ -404,15 +395,10 @@ export function createNav(ctx) {
     offCount = 0;
     announced = {};
     progress = null;
-    routeLine?.remove();
-    routeCasing?.remove();
-    doneLine?.remove();
-    routeCasing = L.polyline(r.coords, CASING_STYLE).addTo(map);
-    routeLine = L.polyline(r.coords, ROUTE_STYLE).addTo(map);
-    doneLine = L.polyline([], { color: '#8a9099', weight: 8, opacity: 1, lineCap: 'round' }).addTo(map);
+    view.setRoute(r.coords);
+    view.setDone([]);
     doneIdx = -1;
-    destMarker?.remove();
-    destMarker = L.marker([r.dest.lat, r.dest.lon]).addTo(map);
+    view.setDest([r.dest.lat, r.dest.lon]);
     follow = true;
     el.recenter.hidden = true;
     el.banner.hidden = false;
@@ -433,11 +419,9 @@ export function createNav(ctx) {
     route = null;
     progress = null;
     pendingDest = null;
-    routeLine?.remove();
-    routeCasing?.remove();
-    doneLine?.remove();
-    destMarker?.remove();
-    routeLine = routeCasing = doneLine = destMarker = null;
+    view.setRoute(null);
+    view.setDest(null);
+    if (view.canRotate && view.getBearing() !== 0) view.resetNorth();
     el.banner.hidden = true;
     el.trip.hidden = true;
     document.body.classList.remove('navigating');
@@ -505,7 +489,7 @@ export function createNav(ctx) {
 
     if (loc.seg !== doneIdx) {
       doneIdx = loc.seg;
-      doneLine.setLatLngs(route.coords.slice(0, loc.seg + 1).concat([[pos.lat, pos.lon]]));
+      view.setDone(route.coords.slice(0, loc.seg + 1).concat([[pos.lat, pos.lon]]));
     }
 
     // Voice prompts: far / near / now, once per step.
@@ -620,7 +604,7 @@ export function createNav(ctx) {
       <button class="result" data-i="${i}"><b>${escapeHtml(r.name)}</b><span class="muted">${escapeHtml(r.label || '')}</span></button>`).join('');
   }
 
-  map.on('click', () => { el.results.hidden = true; });
+  view.on('click', () => { el.results.hidden = true; });
 
   // ---- Public API ----
 
@@ -675,8 +659,8 @@ export function createNav(ctx) {
     new ResizeObserver(() => {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
-        map.invalidateSize({ pan: false });
-        if (shown && follow) map.setView(shown, map.getZoom(), { animate: false });
+        view.resize();
+        if (shown && follow) view.follow(shown);
       });
     }).observe(document.getElementById('map'));
   }
@@ -684,7 +668,7 @@ export function createNav(ctx) {
   startDeviceGps();
 
   return {
-    map,
+    map: view,
     navigateTo,
     searchAndGo,
     // Show search results for a spoken or typed place (the driver picks one).
@@ -702,8 +686,8 @@ export function createNav(ctx) {
     },
     refresh() {
       requestAnimationFrame(() => {
-        map.invalidateSize({ pan: false });
-        if (shown && follow) map.setView(shown, map.getZoom() < 14 ? 16 : map.getZoom(), { animate: false });
+        view.resize();
+        if (shown && follow) view.follow(shown, { zoom: view.getZoom() < 14 ? 16 : null });
       });
     },
     destroy() {
