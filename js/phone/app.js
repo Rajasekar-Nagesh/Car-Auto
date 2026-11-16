@@ -27,6 +27,7 @@ window.carautoNative = {
     else if (ev.type === 'call') client.send({ t: 'phoneCall', ...ev });
     else if (ev.type === 'message') client.send({ t: 'phoneMsg', msg: ev });
     else if (ev.type === 'lanFound') client.lanFound(ev.addr);
+    else if (ev.type === 'btLink') client.btEvent(ev);
   },
 };
 
@@ -93,7 +94,7 @@ function connect() {
     lan: native,
   });
   client.on('status', ({ state, message }) => {
-    native?.onStatus(state, state === 'connected' ? (client.via === 'lan' ? 'direct' : 'internet') : (message || ''));
+    native?.onStatus(state, state === 'connected' ? ({ lan: 'direct', bluetooth: 'bluetooth' }[client.via] || 'internet') : (message || ''));
     if (state === 'connected' && native) pushNativeState();
     if (state === 'connected') setStatus(`Connected to ${carInfo.carName}`, 'good');
     else if (state === 'connecting') setStatus('Connecting to car…', 'warn');

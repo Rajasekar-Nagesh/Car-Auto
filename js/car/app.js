@@ -507,6 +507,9 @@ function handlePhoneMessage(msg, reply, id) {
 async function renderPairing() {
   $('#pair-code').textContent = code;
   $('#pair-help').innerHTML = pairHelpText();
+  $('#link-ways').textContent = native?.lanStart
+    ? `Phones connect directly over your phone's hotspot${native.bluetoothLinkAvailable?.() ? ', over Bluetooth' : ''}, or over the internet.${native.bluetoothLinkAvailable && !native.bluetoothLinkAvailable() ? " (Bluetooth link: this stereo doesn't let apps use Bluetooth, or it's off.)" : ''}`
+    : '';
   const url = phoneUrl();
   $('#pair-url').textContent = url;
   try {

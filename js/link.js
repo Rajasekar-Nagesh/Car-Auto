@@ -258,6 +258,7 @@ export class PhoneClient extends Base {
     document.removeEventListener('visibilitychange', this._onVisible);
     if (this.transport === 'local') this.channel?.postMessage({ to: 'car', from: this.id, msg: { t: 'bye' } });
     this.ws?.close();
+    if (this.via === 'bluetooth') this.lan?.btClose?.();
     this.conn?.close();
     this.peer?.destroy();
     this.channel?.close();
@@ -277,6 +278,7 @@ export class PhoneClient extends Base {
 
   _rawSend(msg) {
     if (this.transport === 'local') this.channel.postMessage({ to: 'car', from: this.id, msg });
+    else if (this.via === 'bluetooth') this.lan.btSend(JSON.stringify(msg));
     else if (this.ws?.readyState === 1) this.ws.send(JSON.stringify(msg));
     else if (this.conn?.open) this.conn.send(msg);
   }
@@ -286,6 +288,38 @@ export class PhoneClient extends Base {
     const w = this._lanWaiter;
     this._lanWaiter = null;
     w?.(addr || '');
+  }
+
+  _tryBt() {
+    return new Promise((resolve) => {
+      this._btWaiter = resolve;
+      try { this.lan.btConnect(this.code); } catch { this._btDone(false); }
+      setTimeout(() => { if (this._btWaiter === resolve) this._btDone(false); }, 25000);
+    });
+  }
+
+  _btDone(ok) {
+    const w = this._btWaiter;
+    this._btWaiter = null;
+    w?.(ok);
+  }
+
+  // Events from the phone app's Bluetooth link: {ev: 'open'|'fail'|'msg'|'close', data}
+  btEvent(ev) {
+    if (ev.ev === 'open') {
+      if (this.connected || this._stopped) { this.lan.btClose?.(); return; }
+      this.via = 'bluetooth';
+      this._btDone(true);
+      this._connected();
+    } else if (ev.ev === 'fail') {
+      this._btDone(false);
+    } else if (ev.ev === 'msg') {
+      let m;
+      try { m = JSON.parse(ev.data); } catch { return; }
+      this._receive(m);
+    } else if (ev.ev === 'close') {
+      if (this.via === 'bluetooth' && this.connected) this._dropped('Bluetooth link lost');
+    }
   }
 
   _findLan() {
@@ -344,6 +378,7 @@ export class PhoneClient extends Base {
   _dropped(message) {
     const was = this.connected;
     this.connected = false;
+    if (this.via === 'bluetooth') this.lan?.btClose?.();
     this.via = null;
     const ws = this.ws;
     this.ws = null;
@@ -379,6 +414,14 @@ export class PhoneClient extends Base {
       this._searching = false;
       if (this._stopped || this.connected) return;
       if (addr) return this._connectWs(addr);
+      // 2) Bluetooth, over the pairing the phone already has with the stereo.
+      if (this.lan.btConnect) {
+        this._searching = true;
+        this._status('connecting', 'Trying Bluetooth…');
+        const ok = await this._tryBt();
+        this._searching = false;
+        if (this._stopped || this.connected || ok) return;
+      }
     }
     // 2) Over the internet (WebRTC).
     this._connectPeer();

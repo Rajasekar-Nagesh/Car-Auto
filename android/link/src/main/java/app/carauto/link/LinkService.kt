@@ -68,6 +68,7 @@ class LinkService : Service() {
         PhoneHub.stopMedia()
         PhoneHub.stopCalls(this)
         PhonePlayer.stop()
+        BtLink.close()
         web?.destroy()
         web = null
         wakeLock?.let { if (it.isHeld) it.release() }
@@ -178,6 +179,18 @@ class LinkService : Service() {
         @JavascriptInterface
         fun getRecents(): String = PhoneHub.recents(ctx).toString()
 
+        /** Connect to the stereo over Bluetooth; answers with "btLink" events. */
+        @JavascriptInterface
+        fun btConnect(code: String) {
+            Thread { BtLink.connect(ctx, code) { event -> sendToPage(event) } }.start()
+        }
+
+        @JavascriptInterface
+        fun btSend(text: String) = BtLink.send(text)
+
+        @JavascriptInterface
+        fun btClose() = BtLink.close()
+
         /** Look for the car on the local network; answers with a "lanFound" event. */
         @JavascriptInterface
         fun discoverCar(code: String) {
@@ -208,7 +221,11 @@ class LinkService : Service() {
         fun onStatus(state: String, message: String) {
             updateStatus(
                 when (state) {
-                    "connected" -> if (message == "direct") "Connected to your car (direct, no internet needed)" else "Connected to your car (over the internet)"
+                    "connected" -> when (message) {
+                        "direct" -> "Connected to your car (direct over hotspot)"
+                        "bluetooth" -> "Connected to your car (over Bluetooth)"
+                        else -> "Connected to your car (over the internet)"
+                    }
                     "connecting" -> "Connecting to car…"
                     else -> message.ifBlank { "Waiting for the car…" }
                 },

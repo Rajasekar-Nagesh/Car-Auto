@@ -155,6 +155,7 @@ Tap the microphone in the taskbar (or press the steering-wheel voice button with
 * **Phone music doesn't show:** check that *Notification access* has a ✓ in Car-Auto Link. Until it's allowed, the car shows "Music on your phone" with play/pause/skip only.
 * **Calls don't show:** check *Phone, contacts & call log* has a ✓. Some phone brands also need Car-Auto Link set to "No restrictions" under battery settings.
 * **"Car not found" / "Connection error":** with both Android apps, the phone connects **directly over the hotspot**: connect the stereo to your phone's Wi-Fi hotspot, keep Car-Auto Dash open, and Car-Auto Link shows *Connected to your car (direct…)*. Without the hotspot it falls back to the internet, which needs both devices online and can fail on some mobile networks.
+* **Bluetooth link:** if there's no hotspot, Car-Auto Link connects over Bluetooth using the pairing the phone already has with the stereo (pick the stereo under *Start automatically when connected to*). Some stereos run Bluetooth on a separate chip apps can't use; the stereo's Settings → Pair your phone says whether Bluetooth linking is available.
 * **Auto-start doesn't happen:** many stereos sleep instead of shutting down when the car turns off, so they never "boot". Use **Use as home screen** instead.
 * **A radio station won't play:** stations that only stream over plain HTTP are hidden; try another.
 * **Steering-wheel buttons** go to whatever is playing (Car-Auto radio or your phone's music).

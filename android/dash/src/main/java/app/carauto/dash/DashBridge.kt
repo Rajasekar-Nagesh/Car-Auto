@@ -59,18 +59,30 @@ class DashBridge(private val activity: MainActivity, private val web: WebView) {
 
     /** Direct local-network link to Car-Auto Link on the phone (no internet needed). */
     private val lan = LanServer(activity) { event -> emit(event) }
+    /** Same link over Bluetooth, for stereos whose Bluetooth apps can use. */
+    private val bt = BtServer(activity) { event -> emit(event) }
 
     @JavascriptInterface
-    fun lanStart(code: String) = lan.start(code)
+    fun lanStart(code: String) {
+        lan.start(code)
+        bt.start(code)
+    }
 
     @JavascriptInterface
-    fun lanSend(id: Int, text: String) = lan.send(id, text)
+    fun lanSend(id: Int, text: String) = if (bt.owns(id)) bt.send(id, text) else lan.send(id, text)
 
     @JavascriptInterface
-    fun lanClose(id: Int) = lan.close(id)
+    fun lanClose(id: Int) = if (bt.owns(id)) bt.close(id) else lan.close(id)
 
     @JavascriptInterface
-    fun lanStop() = lan.stop()
+    fun lanStop() {
+        lan.stop()
+        bt.stop()
+    }
+
+    /** Whether this stereo lets apps use Bluetooth (shown in Settings). */
+    @JavascriptInterface
+    fun bluetoothLinkAvailable(): Boolean = bt.available()
 
     init {
         DashMedia.emit = { event -> emit(event) }
@@ -319,6 +331,7 @@ class DashBridge(private val activity: MainActivity, private val web: WebView) {
 
     fun release() {
         lan.stop()
+        bt.stop()
         recognizer?.destroy()
         session.release()
     }

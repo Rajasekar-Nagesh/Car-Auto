@@ -541,6 +541,27 @@ async function mockNetwork(context) {
     });
     check(statuses.asked[0] === 'WAXR-QZDF' && statuses.seen.some((m) => /nearby/i.test(m)) && statuses.seen.some((m) => /internet/i.test(m)),
       `phone tries the local network, then the internet (${statuses.seen.join(' → ')})`);
+    const btRun = await lanPage.evaluate(async () => {
+      const { PhoneClient } = await import('./js/link.js');
+      const seen = [];
+      const sent = [];
+      const fake = {
+        discoverCar: () => setTimeout(() => client.lanFound(''), 50),
+        btConnect: () => setTimeout(() => client.btEvent({ ev: 'open', device: 'Car stereo' }), 50),
+        btSend: (t) => sent.push(JSON.parse(t).t),
+        btClose: () => {},
+      };
+      const client = new PhoneClient('WAXR-QZDF', { transport: 'peer', lan: fake, name: 'Phone' });
+      client.on('status', (s) => seen.push(s.message || s.state));
+      client.start();
+      await new Promise((r) => setTimeout(r, 400));
+      const via = client.via;
+      client.btEvent({ ev: 'msg', data: JSON.stringify({ t: 'welcome', carName: 'Car' }) });
+      client.stop();
+      return { seen, sent, via };
+    });
+    check(btRun.via === 'bluetooth' && btRun.sent.includes('hello') && btRun.seen.some((m) => /bluetooth/i.test(m)),
+      `falls back to Bluetooth when the hotspot isn't found (${btRun.seen.join(' → ')})`);
     await lanPage.close();
 
     // Fallback map for stereos without WebGL
