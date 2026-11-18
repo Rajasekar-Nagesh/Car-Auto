@@ -138,6 +138,14 @@ ctx.vehicle = vehicle;
 bus.on('notify', ({ from, text }) => showMessage(from, text, { silent: true }));
 
 // Steering-wheel / hardware media keys forwarded by the Android app.
+// Calls seen by the stereo's own Bluetooth phone app (used when Car-Auto Link isn't
+// connected; when it is, Link's richer call events drive the call screen).
+bus.on('native:stereoCall', (ev) => {
+  if (!ctx.phoneLink.available()) bus.emit('phone:call', { ...ev, source: 'stereo' });
+  else if (ev.state !== 'idle') native?.bringToFront?.();
+});
+ctx.getPairCode = () => code;
+
 // Direct local-network connections from Car-Auto Link (stereo app's local server).
 bus.on('native:lan', (ev) => host?.lanEvent(ev));
 

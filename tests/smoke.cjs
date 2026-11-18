@@ -419,6 +419,11 @@ async function mockNetwork(context) {
         openSettings: (w) => window.__log.push(`settings:${w}`),
         getBtMedia: () => 'null',
         lanStart: (c) => window.__log.push(`lan:start:${c}`),
+        setMediaSource: (local) => window.__log.push(`source:${local}`),
+        bringToFront: () => window.__log.push('front'),
+        stereoCallAction: (a) => { window.__log.push(`stereo-call:${a}`); return true; },
+        getLocalContacts: () => JSON.stringify([{ name: 'Stereo Sam', number: '555 0101', starred: false }]),
+        getLocalRecents: () => JSON.stringify([{ name: 'Stereo Sam', number: '555 0101', type: 'in', date: Date.now() - 3600000 }]),
         lanSend: (id, t) => window.__log.push(`lan:send:${id}:${JSON.parse(t).t}`),
         lanClose: (id) => window.__log.push(`lan:close:${id}`),
         lanStop: () => {},
@@ -519,6 +524,29 @@ async function mockNetwork(context) {
     dlog = await dash.evaluate(() => window.__log);
     check(dlog.includes('bt:next') && dlog.includes('bt:pause'), 'controls go to the phone over Bluetooth');
     await dash.screenshot({ path: `${SHOTS}/dash-bluetooth.png` });
+    check((await dash.evaluate(() => window.__log)).includes('source:false'), 'Bluetooth/phone audio: Car-Auto steps aside so the stereo plays it');
+
+    // Contacts without Car-Auto Link: the stereo's own synced contacts
+    await dash.click('.taskbar [data-view=phone]');
+    await dash.click('[data-ptab=all]');
+    await dash.waitForFunction(() => document.querySelector('#synced-list').textContent.includes('Stereo Sam'));
+    check(true, "contacts from the stereo's Bluetooth phone book shown when Link isn't connected");
+    await dash.click('[data-ptab=recents]');
+    check((await dash.textContent('#synced-list')).includes('Stereo Sam'), 'call history from the stereo shown');
+    await dash.click('.taskbar [data-view=home]');
+
+    // Calls from the stereo's own Bluetooth phone app
+    const logStart = await dash.evaluate(() => window.__log.length);
+    await dash.evaluate(() => window.carautoNative.onEvent({ type: 'stereoCall', state: 'ringing', name: 'Stereo Sam', number: '5550101' }));
+    await dash.waitForSelector('#call-overlay:not([hidden])');
+    let clog = (await dash.evaluate(() => window.__log)).slice(logStart);
+    check((await dash.textContent('#call-name')) === 'Stereo Sam' && clog.includes('front'), "stereo's incoming call: Car-Auto comes back on top with its call screen");
+    await dash.click('[data-call=answer]');
+    clog = (await dash.evaluate(() => window.__log)).slice(logStart);
+    check(clog.includes('stereo-call:answer'), "Answer works through the stereo's phone app");
+    await dash.evaluate(() => window.carautoNative.onEvent({ type: 'stereoCall', state: 'idle' }));
+    await dash.waitForSelector('#call-overlay', { state: 'hidden' });
+
     const btVoice = await dash.evaluate(async () => (await import('./js/car/voice.js')).parseCommand('play bluetooth').cmd);
     check(btVoice === 'bluetooth', 'voice: "play bluetooth"');
     check((await dash.evaluate(() => window.__log)).includes('autostart:false'), 'auto-start toggle reaches the app');

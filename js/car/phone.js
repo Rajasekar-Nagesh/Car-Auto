@@ -88,9 +88,31 @@ export function createPhone(ctx) {
     ctx.bus.emit('contacts', items);
   }
 
+  // Without Car-Auto Link, use the contacts/call history the stereo itself
+  // synced from the phone over Bluetooth (when the stereo stores them in Android).
+  const nativeApp = window.CarAutoNative || null;
+  let usingLocal = false;
+  function loadLocal() {
+    if (!nativeApp?.getLocalContacts || ctx.phoneLink?.available()) return;
+    try {
+      phoneContacts = JSON.parse(nativeApp.getLocalContacts());
+      recents = JSON.parse(nativeApp.getLocalRecents());
+    } catch { /* not available */ }
+    usingLocal = phoneContacts.length > 0 || recents.length > 0;
+    renderFavorites();
+  }
+
+  function hintHtml() {
+    const code = ctx.getPairCode?.() || '';
+    return `<p><b>Car-Auto Link isn't connected.</b></p>
+      <p>On your phone open <b>Car-Auto Link</b> and tap <b>Connect</b>${code ? ` (code <b>${escapeHtml(code)}</b>)` : ''}.</p>
+      ${nativeApp?.getLocalContacts ? "<p class=\"small\">Or allow <b>Contacts</b> for Car-Auto Dash on the stereo to use the contacts it copied from your phone over Bluetooth.</p>" : ''}`;
+  }
+
   function renderSynced() {
-    const linked = !!ctx.phoneLink?.available();
+    const linked = !!ctx.phoneLink?.available() || usingLocal;
     el.syncHint.hidden = linked;
+    if (!linked) el.syncHint.innerHTML = hintHtml();
     el.search.hidden = !linked || tab !== 'all';
     if (!linked) { el.synced.innerHTML = ''; return; }
     let rows;
@@ -123,6 +145,8 @@ export function createPhone(ctx) {
     el.body.dataset.ptabShow = name;
     if ((name === 'recents' || name === 'all') && ctx.phoneLink?.available()) {
       ctx.phoneLink.send({ t: name === 'recents' ? 'getRecents' : 'getContacts' });
+    } else if (name === 'recents' || name === 'all') {
+      loadLocal();
     }
     renderSynced();
   }
@@ -181,12 +205,13 @@ export function createPhone(ctx) {
   });
   ctx.bus.on('phone:recents', (m) => { recents = m.items || []; renderSynced(); });
   ctx.bus.on('phone:linked', (on) => {
-    if (on) ctx.phoneLink.send({ t: 'getContacts' });
-    else { phoneContacts = []; recents = []; renderFavorites(); }
+    if (on) { usingLocal = false; ctx.phoneLink.send({ t: 'getContacts' }); }
+    else { phoneContacts = []; recents = []; renderFavorites(); loadLocal(); }
     renderSynced();
   });
 
   renderDisplay();
+  loadLocal();
   renderFavorites();
   showTab('contacts');
 

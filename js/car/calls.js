@@ -25,9 +25,14 @@ export function createCalls(ctx) {
     el.timer.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   }
 
+  let callSource = 'phone'; // 'phone' (Car-Auto Link) | 'stereo' (stereo's own phone app)
+
   function update(ev) {
     const prev = state;
     state = ev.state || 'idle';
+    if (state !== 'idle') callSource = ev.source === 'stereo' ? 'stereo' : 'phone';
+    // The stereo's own call screen pops up over Car-Auto: come back on top.
+    if (state !== 'idle' && prev !== state) window.CarAutoNative?.bringToFront?.();
     const name = displayName(ev);
     document.body.classList.toggle('in-call', state !== 'idle');
     if (state === 'ringing') {
@@ -55,7 +60,9 @@ export function createCalls(ctx) {
   }
 
   function action(a) {
-    ctx.phoneLink?.send({ t: 'pcallAction', action: a });
+    if (ctx.phoneLink?.available() && callSource === 'phone') ctx.phoneLink.send({ t: 'pcallAction', action: a });
+    else if (window.CarAutoNative?.stereoCallAction?.(a)) { /* answered via the stereo's phone app */ }
+    else if (ctx.phoneLink?.available()) ctx.phoneLink.send({ t: 'pcallAction', action: a });
   }
 
   document.addEventListener('click', (e) => {
@@ -64,7 +71,7 @@ export function createCalls(ctx) {
   });
 
   ctx.bus.on('phone:call', update);
-  ctx.bus.on('phone:linked', (on) => { if (!on) update({ state: 'idle' }); });
+  ctx.bus.on('phone:linked', (on) => { if (!on && callSource === 'phone') update({ state: 'idle' }); });
 
   return { action, getState: () => state };
 }

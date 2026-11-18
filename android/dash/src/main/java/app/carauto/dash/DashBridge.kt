@@ -272,6 +272,28 @@ class DashBridge(private val activity: MainActivity, private val web: WebView) {
 
     // ---- Media state (for steering-wheel buttons) ----
 
+    /**
+     * Only claim the stereo's media keys / audio "source" while Car-Auto itself
+     * plays (radio, files). When music comes from the phone over Bluetooth,
+     * stepping aside lets the stereo play its Bluetooth audio.
+     */
+    @JavascriptInterface
+    fun setMediaSource(local: Boolean) {
+        main.post { session.isActive = local }
+    }
+
+    @JavascriptInterface
+    fun bringToFront() = StereoCalls.bringToFront(activity)
+
+    @JavascriptInterface
+    fun stereoCallAction(action: String): Boolean = StereoCalls.action(action)
+
+    @JavascriptInterface
+    fun getLocalContacts(): String = StereoCalls.localContacts(activity).toString()
+
+    @JavascriptInterface
+    fun getLocalRecents(): String = StereoCalls.localRecents(activity).toString()
+
     @JavascriptInterface
     fun setMediaState(title: String, artist: String, playing: Boolean) {
         main.post {
@@ -294,7 +316,6 @@ class DashBridge(private val activity: MainActivity, private val web: WebView) {
                     )
                     .build(),
             )
-            session.isActive = true
         }
     }
 
