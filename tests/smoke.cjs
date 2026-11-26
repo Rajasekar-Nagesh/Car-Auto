@@ -59,7 +59,25 @@ async function mockNetwork(context) {
       { properties: { name: `${q} Park`, city: 'Bengaluru', country: 'India' }, geometry: { coordinates: [77.6, 12.97] } },
     ] } });
   });
-  await context.route(/tiles\.openfreemap\.org/, (r) => r.fulfill({ json: { version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#e8eaed' } }] } }));
+  await context.route(/tiles\.openfreemap\.org/, (r) => {
+    const u = new URL(r.request().url());
+    if (u.pathname.startsWith('/styles/')) {
+      return r.fulfill({ json: {
+        version: 8,
+        glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
+        sprite: 'https://tiles.openfreemap.org/sprites/ofm/ofm',
+        sources: { openmaptiles: { type: 'vector', tiles: ['https://tiles.openfreemap.org/planet/20261120_pt/{z}/{x}/{y}.pbf'], maxzoom: 14 } },
+        layers: [
+          { id: 'bg', type: 'background', paint: { 'background-color': '#e8eaed' } },
+          { id: 'roads', type: 'line', source: 'openmaptiles', 'source-layer': 'transportation', paint: { 'line-color': '#fff' } },
+          { id: 'names', type: 'symbol', source: 'openmaptiles', 'source-layer': 'place', layout: { 'text-field': '{name}', 'text-font': ['Noto Sans Regular'] } },
+        ],
+      } });
+    }
+    if (u.pathname.endsWith('.json')) return r.fulfill({ json: {} });
+    if (u.pathname.endsWith('.png')) return r.fulfill({ body: PNG, contentType: 'image/png' });
+    return r.fulfill({ body: Buffer.alloc(0), contentType: 'application/x-protobuf' });
+  });
   await context.route(/nominatim\.openstreetmap\.org/, (r) => r.fulfill({ json: NOMINATIM }));
   await context.route(/router\.project-osrm\.org/, (r) => r.fulfill({ json: OSRM }));
   await context.route(/api\.open-meteo\.com/, (r) => r.fulfill({ json: { current: { temperature_2m: 27.4, weather_code: 1 } } }));
@@ -419,6 +437,11 @@ async function mockNetwork(context) {
         openSettings: (w) => window.__log.push(`settings:${w}`),
         getBtMedia: () => 'null',
         lanStart: (c) => window.__log.push(`lan:start:${c}`),
+        setMediaSource: (local) => window.__log.push(`source:${local}`),
+        bringToFront: () => window.__log.push('front'),
+        stereoCallAction: (a) => { window.__log.push(`stereo-call:${a}`); return true; },
+        getLocalContacts: () => JSON.stringify([{ name: 'Stereo Sam', number: '555 0101', starred: false }]),
+        getLocalRecents: () => JSON.stringify([{ name: 'Stereo Sam', number: '555 0101', type: 'in', date: Date.now() - 3600000 }]),
         lanSend: (id, t) => window.__log.push(`lan:send:${id}:${JSON.parse(t).t}`),
         lanClose: (id) => window.__log.push(`lan:close:${id}`),
         lanStop: () => {},
@@ -438,6 +461,23 @@ async function mockNetwork(context) {
     await dash.waitForFunction(() => window.carauto?.ctx?.vehicle);
     const st = await dash.evaluate(() => window.carauto.ctx.vehicle._state());
     check(st.v.trips.length === 1 && st.v.trips[0].dist === 12000 && Date.now() - st.trip.start < 60000, 'stereo off >10 min starts a new trip and saves the old one');
+
+    // Music playing on the phone shows automatically (any stereo Bluetooth app name)
+    await dash.evaluate(() => window.carautoNative.onEvent({ type: 'btmedia', media: { title: 'Auto Song', artist: 'Some Artist', app: 'Music', pkg: 'com.vendor.player', bluetooth: false, playing: true, duration: 0, artKey: 'auto', art: null } }));
+    await dash.waitForFunction(() => document.querySelector('#media-card [data-np=title]').textContent === 'Auto Song');
+    check(true, 'phone music shows on the dashboard automatically');
+    await dash.evaluate(() => window.carautoNative.onEvent({ type: 'btmedia', media: null }));
+
+    // Map settings from the map
+    await dash.click('#btn-map-settings');
+    await dash.waitForSelector('#view-settings:not([hidden])');
+    check(await dash.isVisible('#map-card') && await dash.isVisible('#offline-card') && await dash.isVisible('#set-headingup'), 'map ⚙ opens Map & navigation and Offline maps settings');
+    const hu0 = await dash.evaluate(() => window.carauto.ctx.nav.getHeadingUp());
+    await dash.click('#set-headingup');
+    check(await dash.evaluate(() => window.carauto.ctx.nav.getHeadingUp()) === !hu0, 'heading-up setting works');
+    await dash.click('#set-headingup');
+    await dash.screenshot({ path: `${SHOTS}/dash-map-settings.png` });
+    await dash.goBack();
     await dash.click('.taskbar [data-view=apps]');
     await dash.waitForSelector('#stereo-apps .launch');
     check(await dash.locator('#stereo-apps .launch').count() === 3, 'app grid lists apps installed on the stereo');
@@ -519,6 +559,29 @@ async function mockNetwork(context) {
     dlog = await dash.evaluate(() => window.__log);
     check(dlog.includes('bt:next') && dlog.includes('bt:pause'), 'controls go to the phone over Bluetooth');
     await dash.screenshot({ path: `${SHOTS}/dash-bluetooth.png` });
+    check((await dash.evaluate(() => window.__log)).includes('source:false'), 'Bluetooth/phone audio: Car-Auto steps aside so the stereo plays it');
+
+    // Contacts without Car-Auto Link: the stereo's own synced contacts
+    await dash.click('.taskbar [data-view=phone]');
+    await dash.click('[data-ptab=all]');
+    await dash.waitForFunction(() => document.querySelector('#synced-list').textContent.includes('Stereo Sam'));
+    check(true, "contacts from the stereo's Bluetooth phone book shown when Link isn't connected");
+    await dash.click('[data-ptab=recents]');
+    check((await dash.textContent('#synced-list')).includes('Stereo Sam'), 'call history from the stereo shown');
+    await dash.click('.taskbar [data-view=home]');
+
+    // Calls from the stereo's own Bluetooth phone app
+    const logStart = await dash.evaluate(() => window.__log.length);
+    await dash.evaluate(() => window.carautoNative.onEvent({ type: 'stereoCall', state: 'ringing', name: 'Stereo Sam', number: '5550101' }));
+    await dash.waitForSelector('#call-overlay:not([hidden])');
+    let clog = (await dash.evaluate(() => window.__log)).slice(logStart);
+    check((await dash.textContent('#call-name')) === 'Stereo Sam' && clog.includes('front'), "stereo's incoming call: Car-Auto comes back on top with its call screen");
+    await dash.click('[data-call=answer]');
+    clog = (await dash.evaluate(() => window.__log)).slice(logStart);
+    check(clog.includes('stereo-call:answer'), "Answer works through the stereo's phone app");
+    await dash.evaluate(() => window.carautoNative.onEvent({ type: 'stereoCall', state: 'idle' }));
+    await dash.waitForSelector('#call-overlay', { state: 'hidden' });
+
     const btVoice = await dash.evaluate(async () => (await import('./js/car/voice.js')).parseCommand('play bluetooth').cmd);
     check(btVoice === 'bluetooth', 'voice: "play bluetooth"');
     check((await dash.evaluate(() => window.__log)).includes('autostart:false'), 'auto-start toggle reaches the app');
@@ -573,6 +636,31 @@ async function mockNetwork(context) {
     await raster.waitForFunction(() => window.carauto?.ctx?.nav);
     check(await raster.evaluate(() => window.carauto.ctx.nav.map.kind) === 'raster' && !(await raster.isVisible('#btn-compass')), 'raster fallback map works (no compass)');
     await rasterCtx.close();
+
+    // Offline maps: download an area
+    const fetched = new Set();
+    car.on('request', (req) => { const u = req.url(); if (u.includes('tiles.openfreemap.org')) fetched.add(u); });
+    car.on('dialog', (d) => d.accept());
+    await car.click('.taskbar [data-view=apps]');
+    await car.click('[data-open=settings]');
+    await car.selectOption('#offline-radius', '10');
+    await car.click('#btn-offline-area');
+    await car.waitForFunction(() => /saved for offline/.test(document.querySelector('#offline-status').textContent), null, { timeout: 60000 });
+    const tileUrls = [...fetched].filter((u) => /\/planet\/[^/]+\/\d+\/\d+\/\d+\.pbf/.test(u));
+    const fontUrls = [...fetched].filter((u) => u.includes('/fonts/'));
+    check(tileUrls.length > 100 && fontUrls.length >= 10, `offline download fetches tiles (${tileUrls.length}) and label fonts (${fontUrls.length})`);
+    await car.screenshot({ path: `${SHOTS}/car-offline.png` });
+    await car.goBack();
+
+    // No internet and nothing saved: a message instead of a blank map
+    const offCtx = await browser.newContext({ viewport: { width: 1280, height: 720 }, serviceWorkers: 'block' });
+    await mockNetwork(offCtx);
+    await offCtx.route(/tiles\.openfreemap\.org/, (r) => r.abort('internetdisconnected'));
+    const offPage = await offCtx.newPage();
+    await offPage.goto(`${BASE}/car.html?transport=local`);
+    await offPage.waitForSelector('#map-offline:not([hidden])', { timeout: 15000 });
+    check(true, 'offline without saved map shows a message, not a blank screen');
+    await offCtx.close();
 
     // Unpaired phone view
     const fresh = await browser.newPage({ viewport: { width: 390, height: 844 } });

@@ -123,13 +123,27 @@ export function createMusic(ctx) {
     render();
   }
 
+  // Phone started playing: make sure the stereo is on its Bluetooth audio
+  // (many stereos only play it after their Bluetooth music app was opened).
+  let lastBtSwitch = 0;
+  function ensureBluetoothAudio() {
+    if (!nativeApp?.switchToBluetooth || btMedia?.playing) return;
+    if (Date.now() - lastBtSwitch < 10 * 60 * 1000) return;
+    lastBtSwitch = Date.now();
+    if (nativeApp.switchToBluetooth()) toast('Switching the stereo to Bluetooth audio…');
+  }
+
   function setBtMedia(m) {
     if (!m || !m.pkg) { btMedia = null; render(); return; }
     const prevArt = btMedia && btMedia.artKey === m.artKey ? btMedia.art : null;
     const started = m.playing && !btMedia?.playing;
     btMedia = { ...m, art: m.art !== undefined ? m.art : prevArt, receivedAt: Date.now() };
     btPlaying = !!m.playing;
-    if (started && m.bluetooth) {
+    // Something started playing on the stereo's side (its Bluetooth app, whatever
+    // it's called): show it automatically unless Car-Auto's own radio is playing
+    // or the phone link already shows the same music with richer info.
+    const phoneShowing = source === 'phone' && phoneMedia?.playing;
+    if (started && (m.bluetooth || audio.paused) && !phoneShowing) {
       source = 'bt';
       if (!audio.paused) audio.pause();
     }
@@ -208,6 +222,7 @@ export function createMusic(ctx) {
     if (startedPlaying) {
       source = 'phone';
       document.body.classList.remove('buffering');
+      ensureBluetoothAudio();
       if (!audio.paused) audio.pause();
     } else if (!current && source === 'local' && audio.paused) {
       source = 'phone';
@@ -445,7 +460,12 @@ export function createMusic(ctx) {
     clearInterval(progressTimer);
     updateProgress();
     if (playing && progressNow() != null) progressTimer = setInterval(updateProgress, 1000);
-    window.CarAutoNative?.setMediaState?.(name, sub, playing);
+    // Only hold the stereo's media "source" while Car-Auto itself plays; when the
+    // music is on the phone, step aside so the stereo plays its Bluetooth audio.
+    const nat = window.CarAutoNative;
+    const localPlaying = source === 'local' && !!current;
+    nat?.setMediaSource?.(localPlaying);
+    if (localPlaying) nat?.setMediaState?.(name, sub, playing);
     if (playing !== lastPlaying) {
       lastPlaying = playing;
       el.toggle.forEach((b) => {

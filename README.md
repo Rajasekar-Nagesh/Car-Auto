@@ -160,6 +160,20 @@ Tap the microphone in the taskbar (or press the steering-wheel voice button with
 * **A radio station won't play:** stations that only stream over plain HTTP are hidden; try another.
 * **Steering-wheel buttons** go to whatever is playing (Car-Auto radio or your phone's music).
 
+### Offline maps
+
+Every area you view is saved on the stereo (up to about 800 MB) and shows without internet. To prepare a trip, go to **Settings → Offline maps** while online and download **10/25/50 km around you** or **your current route**. Searching for places and starting new routes still need internet; a route you've already started keeps guiding you offline.
+
+### No sound from phone music (YouTube, Spotify…)
+
+* Car-Auto switches the stereo to its Bluetooth audio when your phone starts playing. If you still hear nothing, tap **Music → Bluetooth → Switch stereo to Bluetooth audio**.
+* On the phone, open **Settings → Bluetooth → (your stereo) ⚙** and check **Media audio** is on (not just Calls).
+* Free YouTube pauses when the phone is locked or YouTube isn't on screen.
+
+### The stereo's own call screen appears
+
+The stereo's built-in Bluetooth phone app always shows its own call screen, and other apps can't block it. Car-Auto comes back on top within a second with its own call screen. On Android 10+ stereos this needs **Allow "display over other apps"** (Car-Auto Settings). Some stereos also have a "call pop-up" option in their own Bluetooth settings that you can turn off.
+
 ## Advanced
 
 * **Own pairing server:** run a [PeerJS server](https://github.com/peers/peerjs-server) (`npx peer --port 9000`) behind HTTPS and enter its URL in *Settings → Advanced*. Phones pick it up from the QR code.

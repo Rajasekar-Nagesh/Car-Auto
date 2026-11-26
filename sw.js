@@ -2,10 +2,10 @@
 // dashboard opens instantly, even without signal. Map tiles are cached as you drive (up to a limit) so
 // recently seen areas still show when coverage drops.
 
-const VERSION = 'v6';
+const VERSION = 'v7';
 const SHELL = `carauto-shell-${VERSION}`;
 const TILES = 'carauto-tiles';
-const MAX_TILES = 1500;
+const MAX_TILES = 20000;
 
 const ASSETS = [
   './', 'index.html', 'car.html', 'phone.html',
@@ -16,7 +16,7 @@ const ASSETS = [
   'vendor/leaflet/leaflet.js', 'vendor/leaflet/leaflet.css',
   'vendor/leaflet/images/marker-icon.png', 'vendor/leaflet/images/marker-icon-2x.png', 'vendor/leaflet/images/marker-shadow.png',
   'vendor/peerjs/peerjs.min.js', 'vendor/qrcode/qrcode.js',
-  'vendor/maplibre/maplibre-gl.js', 'vendor/maplibre/maplibre-gl.css', 'js/car/mapview.js',
+  'vendor/maplibre/maplibre-gl.js', 'vendor/maplibre/maplibre-gl.css', 'js/car/mapview.js', 'js/car/offline.js',
   'manifest-car.webmanifest', 'manifest-phone.webmanifest',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png',
 ];
@@ -44,16 +44,25 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
 
-  // Map tiles: network first, fall back to cache.
+  // Map data: tiles/fonts/icons from the offline cache when saved (cache first),
+  // the map style network first. Tile URLs carry a weekly data version that is
+  // dropped from the cache key so saved tiles keep working after updates.
   if (url.hostname === 'tile.openstreetmap.org' || url.hostname === 'tiles.openfreemap.org') {
+    const parts = url.pathname.split('/');
+    if (parts[1] === 'planet' && parts.length === 6) parts.splice(2, 1);
+    const key = `${url.origin}${parts.join('/')}${url.search}`;
+    const mutable = url.pathname.startsWith('/styles/') || url.pathname === '/planet';
+    const network = () => fetch(req).then((res) => {
+      if (res.ok || res.type === 'opaque') {
+        const copy = res.clone();
+        caches.open(TILES).then((c) => c.put(key, copy)).then(trimTiles);
+      }
+      return res;
+    });
     e.respondWith(
-      fetch(req).then((res) => {
-        if (res.ok || res.type === 'opaque') {
-          const copy = res.clone();
-          caches.open(TILES).then((c) => c.put(req, copy)).then(trimTiles);
-        }
-        return res;
-      }).catch(() => caches.match(req).then((r) => r || Response.error())),
+      mutable
+        ? network().catch(() => caches.match(key).then((r) => r || Response.error()))
+        : caches.match(key).then((hit) => hit || network()).catch(() => Response.error()),
     );
     return;
   }
