@@ -702,6 +702,12 @@ export function createNav(ctx) {
     navigateTo,
     searchAndGo,
     getRouteCoords: () => route?.coords || null,
+    getHeadingUp: () => headingUp,
+    setHeadingUp(on) {
+      headingUp = !!on;
+      store.set('headingUp', headingUp);
+      if (!headingUp) view.resetNorth();
+    },
     // Show search results for a spoken or typed place (the driver picks one).
     search(q) {
       el.searchInput.value = q;

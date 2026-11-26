@@ -139,7 +139,11 @@ export function createMusic(ctx) {
     const started = m.playing && !btMedia?.playing;
     btMedia = { ...m, art: m.art !== undefined ? m.art : prevArt, receivedAt: Date.now() };
     btPlaying = !!m.playing;
-    if (started && m.bluetooth) {
+    // Something started playing on the stereo's side (its Bluetooth app, whatever
+    // it's called): show it automatically unless Car-Auto's own radio is playing
+    // or the phone link already shows the same music with richer info.
+    const phoneShowing = source === 'phone' && phoneMedia?.playing;
+    if (started && (m.bluetooth || audio.paused) && !phoneShowing) {
       source = 'bt';
       if (!audio.paused) audio.pause();
     }

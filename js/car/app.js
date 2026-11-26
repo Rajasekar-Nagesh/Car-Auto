@@ -550,6 +550,25 @@ bindSetting('#set-voice', 'voiceGuidance');
 bindSetting('#set-gps', 'gpsSource', { after: broadcastState });
 bindSetting('#set-theme', 'theme', { after: applyTheme });
 bindSetting('#set-awake', 'keepAwake', { after: (v) => v && keepAwake(true) });
+// Map ⚙ button: open Settings at the map card.
+$('#btn-map-settings').addEventListener('click', () => {
+  showView('settings');
+  requestAnimationFrame(() => $('#map-card').scrollIntoView({ block: 'start' }));
+});
+const headingInput = $('#set-headingup');
+headingInput.checked = nav.getHeadingUp();
+headingInput.addEventListener('change', () => nav.setHeadingUp(headingInput.checked));
+
+// Stereo app: ask once to allow notification access, so whatever plays on the
+// phone (YouTube, Spotify…) shows on the dashboard automatically, even without
+// Car-Auto Link (song info comes from the stereo's Bluetooth app).
+if (native?.btInfoAllowed && !native.btInfoAllowed() && !store.get('askedNowPlaying', false)) {
+  setTimeout(() => {
+    store.set('askedNowPlaying', true);
+    if (confirm('Show what plays on your phone (YouTube, Spotify…) on the dashboard automatically?\n\nNext screen: turn on notification access for Car-Auto Dash.')) native.allowBtInfo();
+  }, 4000);
+}
+
 bindSetting('#set-demo', 'demo', { after: (v) => { nav.setDemo(v); toast(v ? 'Demo drive on: routes will be driven automatically' : 'Demo drive off'); } });
 
 $('#btn-new-code').addEventListener('click', () => {

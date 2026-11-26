@@ -540,7 +540,8 @@ body.in-call .map-top { margin-top: 84px; }
 body.night-map.map-vector .maplibregl-canvas { filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.92) saturate(0.6); }
 .maplibregl-ctrl-bottom-right { margin-right: 96px; }
 .maplibregl-ctrl-attrib.maplibregl-compact { background: #0007; color: #ccc; }
-.fab.compass { top: 86px; color: var(--text); }
+.fab.compass { top: 158px; color: var(--text); }
+.fab.map-settings { top: 86px; }
 .fab.compass svg { transition: transform .15s linear; width: 30px; height: 30px; }
 
 /* Offline maps */

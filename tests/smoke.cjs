@@ -461,6 +461,23 @@ async function mockNetwork(context) {
     await dash.waitForFunction(() => window.carauto?.ctx?.vehicle);
     const st = await dash.evaluate(() => window.carauto.ctx.vehicle._state());
     check(st.v.trips.length === 1 && st.v.trips[0].dist === 12000 && Date.now() - st.trip.start < 60000, 'stereo off >10 min starts a new trip and saves the old one');
+
+    // Music playing on the phone shows automatically (any stereo Bluetooth app name)
+    await dash.evaluate(() => window.carautoNative.onEvent({ type: 'btmedia', media: { title: 'Auto Song', artist: 'Some Artist', app: 'Music', pkg: 'com.vendor.player', bluetooth: false, playing: true, duration: 0, artKey: 'auto', art: null } }));
+    await dash.waitForFunction(() => document.querySelector('#media-card [data-np=title]').textContent === 'Auto Song');
+    check(true, 'phone music shows on the dashboard automatically');
+    await dash.evaluate(() => window.carautoNative.onEvent({ type: 'btmedia', media: null }));
+
+    // Map settings from the map
+    await dash.click('#btn-map-settings');
+    await dash.waitForSelector('#view-settings:not([hidden])');
+    check(await dash.isVisible('#map-card') && await dash.isVisible('#offline-card') && await dash.isVisible('#set-headingup'), 'map ⚙ opens Map & navigation and Offline maps settings');
+    const hu0 = await dash.evaluate(() => window.carauto.ctx.nav.getHeadingUp());
+    await dash.click('#set-headingup');
+    check(await dash.evaluate(() => window.carauto.ctx.nav.getHeadingUp()) === !hu0, 'heading-up setting works');
+    await dash.click('#set-headingup');
+    await dash.screenshot({ path: `${SHOTS}/dash-map-settings.png` });
+    await dash.goBack();
     await dash.click('.taskbar [data-view=apps]');
     await dash.waitForSelector('#stereo-apps .launch');
     check(await dash.locator('#stereo-apps .launch').count() === 3, 'app grid lists apps installed on the stereo');
