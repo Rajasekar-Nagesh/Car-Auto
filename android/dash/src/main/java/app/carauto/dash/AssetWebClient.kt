@@ -22,6 +22,8 @@ class AssetWebClient(private val context: Context) : WebViewClient() {
 
     override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
         val url = request.url
+        // Map data: served from the offline map store (and saved there when online).
+        if (MapCache.handles(url)) return MapCache.respond(request)
         if (url.host != APP_HOST) return null
         var path = (url.path ?: "/").trimStart('/')
         if (path.isEmpty() || path.endsWith("/")) path += "index.html"

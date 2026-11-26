@@ -542,3 +542,10 @@ body.night-map.map-vector .maplibregl-canvas { filter: invert(1) hue-rotate(180d
 .maplibregl-ctrl-attrib.maplibregl-compact { background: #0007; color: #ccc; }
 .fab.compass { top: 86px; color: var(--text); }
 .fab.compass svg { transition: transform .15s linear; width: 30px; height: 30px; }
+
+/* Offline maps */
+.map-offline { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 450; width: min(420px, 85%);
+  background: var(--surface); border-radius: var(--radius); padding: 20px 24px; text-align: center; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 8px 24px #000a; }
+.map-offline span { color: var(--muted); font-size: 0.9rem; }
+.offline-progress { margin: 10px 0 4px; height: 6px; }
+#offline-card select { flex: 1; }

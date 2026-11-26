@@ -13,6 +13,7 @@ import { createVoice } from './voice.js';
 import { createHome } from './home.js';
 import { createCalls } from './calls.js';
 import { createVehicle } from './vehicle.js';
+import { createOffline } from './offline.js';
 
 // The Car-Auto Dash Android app (stereo) exposes window.CarAutoNative and
 // delivers events (media keys, voice results) through this hook.
@@ -77,7 +78,7 @@ function showView(name, { fromHistory = false } = {}) {
   $$('.taskbar [data-view]').forEach((b) => b.classList.toggle('active', b.dataset.view === name));
   if (isDash) nav?.refresh();
   if (name === 'music') music?.onShow();
-  if (name === 'settings') renderPairing();
+  if (name === 'settings') { renderPairing(); offline?.onShow(); }
   if (name === 'messages') renderMessages();
   if (name === 'apps') renderStereoApps();
   if (name === 'vehicle') vehicle?.onShow();
@@ -134,6 +135,7 @@ ctx.voiceCmd = voice;
 const calls = createCalls(ctx);
 ctx.calls = calls;
 const vehicle = createVehicle(ctx);
+const offline = createOffline(ctx);
 ctx.vehicle = vehicle;
 bus.on('notify', ({ from, text }) => showMessage(from, text, { silent: true }));
 

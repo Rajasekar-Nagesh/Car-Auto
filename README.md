@@ -160,6 +160,10 @@ Tap the microphone in the taskbar (or press the steering-wheel voice button with
 * **A radio station won't play:** stations that only stream over plain HTTP are hidden; try another.
 * **Steering-wheel buttons** go to whatever is playing (Car-Auto radio or your phone's music).
 
+### Offline maps
+
+Every area you view is saved on the stereo (up to about 800 MB) and shows without internet. To prepare a trip, go to **Settings → Offline maps** while online and download **10/25/50 km around you** or **your current route**. Searching for places and starting new routes still need internet; a route you've already started keeps guiding you offline.
+
 ### No sound from phone music (YouTube, Spotify…)
 
 * Car-Auto switches the stereo to its Bluetooth audio when your phone starts playing. If you still hear nothing, tap **Music → Bluetooth → Switch stereo to Bluetooth audio**.

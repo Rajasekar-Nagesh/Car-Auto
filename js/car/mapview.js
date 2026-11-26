@@ -69,8 +69,11 @@ function vectorView(container, { center, zoom }) {
   map.addControl(new ml.AttributionControl({ compact: true }), 'bottom-right');
   map.touchZoomRotate.enableRotation();
 
-  const handlers = { userpan: [], click: [], rotate: [] };
+  const handlers = { userpan: [], click: [], rotate: [], unavailable: [], loaded: [] };
   const fire = (t, ...a) => handlers[t].forEach((fn) => fn(...a));
+  // Style couldn't load (offline and never saved): tell the UI instead of a blank map.
+  map.on('error', () => { if (!map.isStyleLoaded()) fire('unavailable'); });
+  map.on('load', () => fire('loaded'));
   map.on('dragstart', (e) => { if (e.originalEvent) fire('userpan'); });
   map.on('rotate', () => fire('rotate', map.getBearing()));
   map.on('click', () => fire('click'));
@@ -135,6 +138,28 @@ function vectorView(container, { center, zoom }) {
       dest = ll ? new ml.Marker({ color: '#ea4335' }).setLngLat(toLngLat(ll)).addTo(map) : null;
     },
     resize() { map.resize(); },
+    // What to download for offline use: tile URL template, fonts, icons.
+    offlineSources() {
+      if (!map.isStyleLoaded()) return null;
+      const style = map.getStyle();
+      let tiles = null;
+      let maxzoom = 14;
+      for (const id of Object.keys(style.sources || {})) {
+        const src = map.getSource(id);
+        if (src?.type === 'vector' && src.tiles?.length) {
+          tiles = src.tiles[0];
+          maxzoom = Math.min(src.maxzoom ?? 14, 14);
+          break;
+        }
+      }
+      const fonts = new Set();
+      (style.layers || []).forEach((l) => {
+        const f = l.layout?.['text-font'];
+        if (Array.isArray(f) && f.every((x) => typeof x === 'string')) fonts.add(f.join(','));
+      });
+      const sprite = typeof style.sprite === 'string' ? [style.sprite] : (style.sprite || []).map((s) => s.url);
+      return { tiles, maxzoom, glyphs: style.glyphs || null, fonts: [...fonts], sprite };
+    },
     raw: map,
   };
 }
@@ -159,7 +184,7 @@ function rasterView(container, { center, zoom }) {
     attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   }).addTo(map);
 
-  const handlers = { userpan: [], click: [], rotate: [] };
+  const handlers = { userpan: [], click: [], rotate: [], unavailable: [], loaded: [] };
   map.on('dragstart', () => handlers.userpan.forEach((fn) => fn()));
   map.on('click', () => handlers.click.forEach((fn) => fn()));
 

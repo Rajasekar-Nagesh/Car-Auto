@@ -59,7 +59,25 @@ async function mockNetwork(context) {
       { properties: { name: `${q} Park`, city: 'Bengaluru', country: 'India' }, geometry: { coordinates: [77.6, 12.97] } },
     ] } });
   });
-  await context.route(/tiles\.openfreemap\.org/, (r) => r.fulfill({ json: { version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#e8eaed' } }] } }));
+  await context.route(/tiles\.openfreemap\.org/, (r) => {
+    const u = new URL(r.request().url());
+    if (u.pathname.startsWith('/styles/')) {
+      return r.fulfill({ json: {
+        version: 8,
+        glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
+        sprite: 'https://tiles.openfreemap.org/sprites/ofm/ofm',
+        sources: { openmaptiles: { type: 'vector', tiles: ['https://tiles.openfreemap.org/planet/20261120_pt/{z}/{x}/{y}.pbf'], maxzoom: 14 } },
+        layers: [
+          { id: 'bg', type: 'background', paint: { 'background-color': '#e8eaed' } },
+          { id: 'roads', type: 'line', source: 'openmaptiles', 'source-layer': 'transportation', paint: { 'line-color': '#fff' } },
+          { id: 'names', type: 'symbol', source: 'openmaptiles', 'source-layer': 'place', layout: { 'text-field': '{name}', 'text-font': ['Noto Sans Regular'] } },
+        ],
+      } });
+    }
+    if (u.pathname.endsWith('.json')) return r.fulfill({ json: {} });
+    if (u.pathname.endsWith('.png')) return r.fulfill({ body: PNG, contentType: 'image/png' });
+    return r.fulfill({ body: Buffer.alloc(0), contentType: 'application/x-protobuf' });
+  });
   await context.route(/nominatim\.openstreetmap\.org/, (r) => r.fulfill({ json: NOMINATIM }));
   await context.route(/router\.project-osrm\.org/, (r) => r.fulfill({ json: OSRM }));
   await context.route(/api\.open-meteo\.com/, (r) => r.fulfill({ json: { current: { temperature_2m: 27.4, weather_code: 1 } } }));
@@ -601,6 +619,31 @@ async function mockNetwork(context) {
     await raster.waitForFunction(() => window.carauto?.ctx?.nav);
     check(await raster.evaluate(() => window.carauto.ctx.nav.map.kind) === 'raster' && !(await raster.isVisible('#btn-compass')), 'raster fallback map works (no compass)');
     await rasterCtx.close();
+
+    // Offline maps: download an area
+    const fetched = new Set();
+    car.on('request', (req) => { const u = req.url(); if (u.includes('tiles.openfreemap.org')) fetched.add(u); });
+    car.on('dialog', (d) => d.accept());
+    await car.click('.taskbar [data-view=apps]');
+    await car.click('[data-open=settings]');
+    await car.selectOption('#offline-radius', '10');
+    await car.click('#btn-offline-area');
+    await car.waitForFunction(() => /saved for offline/.test(document.querySelector('#offline-status').textContent), null, { timeout: 60000 });
+    const tileUrls = [...fetched].filter((u) => /\/planet\/[^/]+\/\d+\/\d+\/\d+\.pbf/.test(u));
+    const fontUrls = [...fetched].filter((u) => u.includes('/fonts/'));
+    check(tileUrls.length > 100 && fontUrls.length >= 10, `offline download fetches tiles (${tileUrls.length}) and label fonts (${fontUrls.length})`);
+    await car.screenshot({ path: `${SHOTS}/car-offline.png` });
+    await car.goBack();
+
+    // No internet and nothing saved: a message instead of a blank map
+    const offCtx = await browser.newContext({ viewport: { width: 1280, height: 720 }, serviceWorkers: 'block' });
+    await mockNetwork(offCtx);
+    await offCtx.route(/tiles\.openfreemap\.org/, (r) => r.abort('internetdisconnected'));
+    const offPage = await offCtx.newPage();
+    await offPage.goto(`${BASE}/car.html?transport=local`);
+    await offPage.waitForSelector('#map-offline:not([hidden])', { timeout: 15000 });
+    check(true, 'offline without saved map shows a message, not a blank screen');
+    await offCtx.close();
 
     // Unpaired phone view
     const fresh = await browser.newPage({ viewport: { width: 390, height: 844 } });

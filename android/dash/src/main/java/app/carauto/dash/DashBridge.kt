@@ -285,6 +285,13 @@ class DashBridge(private val activity: MainActivity, private val web: WebView) {
     @JavascriptInterface
     fun bringToFront() = StereoCalls.bringToFront(activity)
 
+    /** Offline map storage: {files, bytes, max}. */
+    @JavascriptInterface
+    fun offlineMapStats(): String = MapCache.stats().toString()
+
+    @JavascriptInterface
+    fun clearOfflineMaps() = MapCache.clear()
+
     @JavascriptInterface
     fun stereoCallAction(action: String): Boolean = StereoCalls.action(action)
 

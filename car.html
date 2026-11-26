@@ -19,6 +19,7 @@
   <link rel="modulepreload" href="js/car/app.js">
   <link rel="modulepreload" href="js/car/nav.js">
   <link rel="modulepreload" href="js/car/mapview.js">
+  <link rel="modulepreload" href="js/car/offline.js">
   <link rel="modulepreload" href="js/car/music.js">
   <link rel="modulepreload" href="js/car/home.js">
   <link rel="modulepreload" href="js/car/phone.js">
@@ -89,6 +90,10 @@
         <button id="btn-compass" class="fab compass" aria-label="Compass: north up / heading up" hidden>
           <svg viewBox="0 0 24 24"><path d="M12 2 8 12h8z" fill="#ea4335"/><path d="M12 22l4-10H8z" fill="currentColor"/></svg>
         </button>
+        <div id="map-offline" class="map-offline" hidden>
+          <b>Map not available offline</b>
+          <span>Connect to the internet once, or download this area in Settings → Offline maps.</span>
+        </div>
         <button id="btn-expand" class="fab expand" aria-label="Full screen map">
           <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7zm-2-4h2V7h3V5H5zm12 7h-3v2h5v-5h-2zM14 5v2h3v3h2V5z"/></svg>
         </button>
@@ -327,6 +332,28 @@
           <p class="muted">For the full experience install the free Android apps:</p>
           <p><b>On this stereo:</b> <a href="apk/car-auto-dash.apk">Car-Auto Dash</a> — opens any app on the stereo, voice, auto-start.</p>
           <p><b>On your Android phone:</b> <a href="apk/car-auto-link.apk">Car-Auto Link</a> — phone music, calls and contacts on the car screen.</p>
+        </div>
+
+        <div class="card" id="offline-card">
+          <h3>Offline maps</h3>
+          <p class="muted small">Areas you've viewed are saved automatically. Download more while you have internet to use the map without it.</p>
+          <div class="row">
+            <select id="offline-radius" aria-label="Area size">
+              <option value="10">10 km around me</option>
+              <option value="25" selected>25 km around me</option>
+              <option value="50">50 km around me</option>
+            </select>
+            <button class="btn primary" id="btn-offline-area">Download</button>
+          </div>
+          <button class="btn wide" id="btn-offline-route" hidden>Download my current route</button>
+          <div class="np-progress offline-progress" id="offline-progress" hidden><i></i></div>
+          <p class="muted small" id="offline-status"></p>
+          <div class="row wrap">
+            <span class="muted small" id="offline-stats"></span>
+            <button class="btn small" id="btn-offline-cancel" hidden>Cancel</button>
+            <button class="btn small danger" id="btn-offline-clear">Delete offline maps</button>
+          </div>
+          <p class="muted small">Search and new routes still need internet; a route you've started keeps guiding offline.</p>
         </div>
 
         <div class="card">
